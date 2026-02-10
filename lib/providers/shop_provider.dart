@@ -12,6 +12,7 @@ class ShopProvider with ChangeNotifier {
   String? _ownerUid;
   bool get autoRenewEnabled => _autoRenew;
   bool _isPro = false;
+  String _payheroChannelId = ""; // 👈 NEW
   String _userRole = 'Owner'; // 👈 NEW: 'Owner' or 'Attendant'
 
   // Getters
@@ -27,7 +28,8 @@ class ShopProvider with ChangeNotifier {
 
   // Getters
   String get shopName => _shopName;
-  String get shopId => _shopId; 
+  String get shopId => _shopId;
+  String get payheroChannelId => _payheroChannelId; // 👈 NEW
   bool get isDarkMode => _isDarkMode;
   bool get enableSound => _enableSound;
 
@@ -45,7 +47,7 @@ class ShopProvider with ChangeNotifier {
     notifyListeners();
   }
 
-Future<void> refreshProStatus() async {
+  Future<void> refreshProStatus() async {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('shops')
@@ -57,9 +59,10 @@ Future<void> refreshProStatus() async {
         if (data['pro_expiry'] != null) {
           _proExpiry = (data['pro_expiry'] as Timestamp).toDate();
         }
-        _isPro = data['is_pro'] ?? false; // 👈 Now this works!
+        _isPro = data['is_pro'] ?? false;
+        _payheroChannelId = data['payhero_channel_id'] ?? ""; // 👈 Sync ID
         _autoRenew = data['auto_renew'] ?? false;
-        notifyListeners(); 
+        notifyListeners();
       }
     } catch (e) {
       debugPrint("Error refreshing pro status: $e");

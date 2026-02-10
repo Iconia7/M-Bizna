@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 5, // 🚀 Incremented version for new features
+      version: 6, // 🚀 Incremented version for new features
       onCreate: _createDB,
       onUpgrade: _onUpgrade, // 👈 Added migration handler
     );
@@ -46,7 +46,17 @@ class DatabaseHelper {
       }
     }
     if (oldVersion < 5) {
-       // Future migrations
+       // Placeholder for v5
+    }
+    if (oldVersion < 6) {
+      // Migrate to v6: Add missing settings columns
+      try {
+        await db.execute('ALTER TABLE settings ADD COLUMN mpesa_channel_type TEXT DEFAULT "Paybill"');
+        await db.execute('ALTER TABLE settings ADD COLUMN mpesa_shortcode TEXT');
+        await db.execute('ALTER TABLE settings ADD COLUMN mpesa_account TEXT');
+      } catch (e) {
+        print("Migration v6 error (columns might exist): $e");
+      }
     }
   }
 
@@ -121,7 +131,10 @@ class DatabaseHelper {
     mpesa_mode TEXT DEFAULT 'Manual', 
     mpesa_number TEXT,               
     payhero_channel_id TEXT,         
-    payhero_auth TEXT               
+    payhero_auth TEXT,
+    mpesa_channel_type TEXT DEFAULT 'Paybill', -- 👈 NEW
+    mpesa_shortcode TEXT, -- 👈 NEW
+    mpesa_account TEXT -- 👈 NEW
   )
 ''');
 await db.insert('settings', {'id': 1, 'mpesa_mode': 'Manual'});

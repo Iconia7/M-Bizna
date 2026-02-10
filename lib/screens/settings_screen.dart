@@ -12,7 +12,7 @@ import 'package:duka_manager/services/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../providers/shop_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/inventory_provider.dart';
@@ -21,6 +21,7 @@ import '../providers/report_provider.dart';
 import '../widgets/feedback_dialog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/biometric_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -32,11 +33,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = "Loading...";
   String get shopId => Provider.of<ShopProvider>(context, listen: false).shopId;
   
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
-  static const Color dangerRed = Color(0xFFFF453A);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : Colors.white.withOpacity(0.05);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
+  Color get _dangerRed => const Color(0xFFFF453A);
 
   @override
   void initState() {
@@ -64,6 +67,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // We use a fixed amount of 200 for the monthly subscription
   const double subAmount = 200.0;
+  // Check if Shop is activated for PayHero
+  if (shop.payheroChannelId.isEmpty) {
+    FeedbackDialog.show(
+      context, 
+      title: "Not Activated", 
+      message: "This shop is not linked to PayHero. Please contact support.", 
+      isSuccess: false
+    );
+    return;
+  }
+
+  // Ensure M-Pesa number is available locally or in settings
   String? mpesaNumber = settings['mpesa_number'];
   if (mpesaNumber == null || mpesaNumber.trim().isEmpty) {
     _showNumberRequiredDialog(); // Create a small dialog to collect the number
@@ -76,11 +91,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     phoneNumber: mpesaNumber, 
     amount: subAmount,
     externalReference: shop.generatePayHeroRef("SUB"),
-    basicAuth: settings['payhero_auth'], 
-    channelId: settings['payhero_channel_id'],
+    basicAuth: dotenv.env['PAYHERO_BASIC_AUTH']!, // 👈 Fixed: Use global Basic Auth from .env
+    channelId: shop.payheroChannelId, // 👈 Fixed: Use ID from Shop Provider
   );
 
   if (invoiceId != null) {
+    if (!mounted) return;
     // Show the same listening dialog we use for sales
     _showListeningDialog(invoiceId);
   } else {
@@ -103,7 +119,11 @@ void _showNumberRequiredDialog() {
       content: TextField(
         controller: phoneController,
         keyboardType: TextInputType.phone,
-        decoration: InputDecoration(hintText: "Enter M-Pesa Number (07xx...)"),
+        style: TextStyle(color: _textColor), // 👈 Visibility fix
+        decoration: InputDecoration(
+          hintText: "Enter M-Pesa Number (07xx...)",
+          hintStyle: TextStyle(color: Colors.grey.shade500),
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancel")),
@@ -172,7 +192,7 @@ void _showNumberRequiredDialog() {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: primaryOrange),
+                  CircularProgressIndicator(color: _primaryOrange),
                   SizedBox(height: 25),
                   Text("Waiting for M-Pesa...", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   SizedBox(height: 10),
@@ -233,15 +253,15 @@ void _showNumberRequiredDialog() {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Factory Reset?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: dangerRed)),
-        content: Text("This will delete ALL products and sales history. This cannot be undone.", style: GoogleFonts.poppins(color: textDark)),
+        title: Text("Factory Reset?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _dangerRed)),
+        content: Text("This will delete ALL products and sales history. This cannot be undone.", style: GoogleFonts.poppins(color: _textColor)),
         actions: [
           TextButton(
             child: Text("Cancel", style: GoogleFonts.poppins(color: Colors.grey)),
             onPressed: () => Navigator.pop(ctx),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: dangerRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(backgroundColor: _dangerRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             child: Text("Delete Everything", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
             onPressed: () async {
   Navigator.pop(ctx);
@@ -255,6 +275,7 @@ void _showNumberRequiredDialog() {
   
   // 3. Reload Providers
   if (mounted) {
+    if (!mounted) return; // redundant but safe
     Provider.of<InventoryProvider>(context, listen: false).loadProducts();
     Provider.of<SalesProvider>(context, listen: false).clearCart();
     Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
@@ -282,12 +303,12 @@ void _showNumberRequiredDialog() {
     final shop = Provider.of<ShopProvider>(context);
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _surfaceColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _surfaceColor,
         elevation: 0,
-        title: Text("Settings", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold)),
-        iconTheme: IconThemeData(color: textDark),
+        title: Text("Settings", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold)),
+        iconTheme: IconThemeData(color: _textColor),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -302,11 +323,11 @@ void _showNumberRequiredDialog() {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Business Name", style: GoogleFonts.poppins(fontSize: 14, color: textDark)),
+                  Text("Business Name", style: GoogleFonts.poppins(fontSize: 14, color: _textColor)),
                   SizedBox(height: 10),
                   TextField(
                     controller: _nameController,
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: textDark),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor),
                     decoration: _inputDecoration("Enter Shop Name"),
                   ),
                   SizedBox(height: 15),
@@ -314,8 +335,8 @@ void _showNumberRequiredDialog() {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: textDark,
-                        foregroundColor: Colors.white,
+                        backgroundColor: _textColor,
+                        foregroundColor: _surfaceColor,
                         padding: EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -352,12 +373,12 @@ void _showNumberRequiredDialog() {
 Card(
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
   child: ListTile(
-    leading: const Icon(Icons.fingerprint, color: primaryOrange),
+    leading: Icon(Icons.fingerprint, color: _primaryOrange),
     title: Text("M-Bizna Lock", style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-    subtitle: const Text("Require PIN/Biometrics to view debts, Reports & Settings", style: TextStyle(fontSize: 12)),
+    subtitle: Text("Require PIN/Biometrics to view debts, Reports & Settings", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
     trailing: Switch(
   value: shop.isSecurityEnabled, // ✅ Matches your 'final shop' variable
-  activeColor: primaryOrange,
+  activeColor: _primaryOrange,
   onChanged: (val) => shop.toggleSecurity(val),
 ),
   ),
@@ -408,10 +429,10 @@ Card(
                     },
                     leading: Container(
                       padding: EdgeInsets.all(8), 
-                      decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle), 
-                      child: Icon(Icons.print, color: primaryOrange)
+                      decoration: BoxDecoration(color: _primaryOrange.withOpacity(0.1), shape: BoxShape.circle), 
+                      child: Icon(Icons.print, color: _primaryOrange)
                     ),
-                    title: Text("Printer Settings", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)),
+                    title: Text("Printer Settings", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
                     subtitle: Text("Connect Thermal Printer", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
                     trailing: Icon(Icons.chevron_right, color: Colors.grey),
                   ),
@@ -419,19 +440,19 @@ Card(
                   // Inside your SettingsScreen build method
 ListTile(
   enabled: shop.isProActive, // 🚀 Disable if not currently Pro
-  leading: Icon(Icons.refresh, color: shop.isProActive ? primaryOrange : Colors.grey),
+  leading: Icon(Icons.refresh, color: shop.isProActive ? _primaryOrange : Colors.grey),
   title: Text("Auto-Renew Subscription", 
     style: GoogleFonts.poppins(
       fontWeight: FontWeight.w600,
-      color: shop.isProActive ? textDark : Colors.grey // Visual feedback
+      color: shop.isProActive ? _textColor : Colors.grey // Visual feedback
     )),
   subtitle: Text(shop.isProActive 
     ? "Renew using app balance when expired" 
     : "Subscribe to Pro to enable auto-renew", 
-    style: TextStyle(fontSize: 12)),
+    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
   trailing: Switch(
     value: shop.autoRenewEnabled,
-    activeColor: primaryOrange,
+    activeColor: _primaryOrange,
     onChanged: shop.isProActive ? (val) => shop.toggleAutoRenew(val) : null,
   ),
 ),
@@ -439,7 +460,7 @@ Divider(height: 1, color: Colors.grey.shade100),
                   
                   // Currency (Static)
                   ListTile(
-                    title: Text("Currency", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)),
+                    title: Text("Currency", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
                     subtitle: Text("Kenyan Shilling (KES)", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
                     trailing: Icon(Icons.chevron_right, color: Colors.grey),
                   ),
@@ -449,20 +470,20 @@ ListTile(
   leading: Container(
     padding: const EdgeInsets.all(8),
     decoration: BoxDecoration(
-      color: primaryOrange.withOpacity(0.1),
+      color: _primaryOrange.withOpacity(0.1),
       shape: BoxShape.circle,
     ),
-    child: const Icon(Icons.account_balance_wallet_outlined, color: primaryOrange),
+    child: Icon(Icons.account_balance_wallet_outlined, color: _primaryOrange),
   ),
   title: Text(
     "M-Pesa & Payments",
-    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor),
   ),
   subtitle: Text(
     "Configure STK Push, Pochi, or PayHero",
-    style: GoogleFonts.poppins(fontSize: 12),
+    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
   ),
-  trailing: const Icon(Icons.chevron_right, size: 20),
+  trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
   onTap: () {
     Navigator.push(
       context,
@@ -527,7 +548,7 @@ ListTile(
                 decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle), 
                 child: Icon(Icons.cloud_upload_outlined, color: Colors.blue)
               ),
-              title: Text("Cloud Backup", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)),
+              title: Text("Cloud Backup", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
               subtitle: Text("Sync Sales, Inventory & Debtors", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
               trailing: Icon(Icons.chevron_right, color: Colors.grey),
             ),
@@ -544,15 +565,15 @@ ListTile(
                       decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle), 
                       child: Icon(Icons.save_alt, color: Colors.green)
                     ),
-                    title: Text("Local Backup", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)),
+                    title: Text("Local Backup", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
                     subtitle: Text("Export CSV to phone (Free)", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
                     trailing: Icon(Icons.share, size: 20, color: Colors.grey),
                   ),
                   Divider(height: 1, color: Colors.grey.shade100),
                   ListTile(
                     onTap: _confirmReset,
-                    leading: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle), child: Icon(Icons.delete_forever_outlined, color: dangerRed)),
-                    title: Text("Reset Everything", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: dangerRed)),
+                    leading: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle), child: Icon(Icons.delete_forever_outlined, color: _dangerRed)),
+                    title: Text("Reset Everything", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _dangerRed)),
                     subtitle: Text("Delete all products & sales", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
                   ),
                 ],
@@ -579,7 +600,7 @@ ListTile(
                   ),
                   Divider(height: 1),
                   ListTile(
-  title: Text("Version", style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+  title: Text("Version", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
   trailing: Text(
     _appVersion, // 👈 Now it shows the real version (e.g., 1.0.2+5)
     style: GoogleFonts.poppins(color: Colors.grey),
@@ -606,7 +627,7 @@ Container(
           Expanded(
             child: Text(
               shop.shopId, 
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryOrange, fontSize: 13)
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryOrange, fontSize: 13)
             ),
           ),
           IconButton(
@@ -642,7 +663,7 @@ Container(
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
+      color: _cardColor,
       borderRadius: BorderRadius.circular(20),
       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: Offset(0, 4))],
     );
@@ -651,7 +672,7 @@ Container(
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       filled: true,
-      fillColor: cardGray,
+      fillColor: _containerColor,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       hintText: hint,
       contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 15),
@@ -660,8 +681,8 @@ Container(
 
   Widget _buildSwitchTile(String title, String subtitle, bool value, Function(bool) onChanged) {
     return SwitchListTile(
-      activeColor: primaryOrange,
-      title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)),
+      activeColor: _primaryOrange,
+      title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
       subtitle: Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
       value: value,
       onChanged: onChanged,

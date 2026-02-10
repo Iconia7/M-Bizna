@@ -10,21 +10,24 @@ import '../services/payhero_service.dart';
 import '../widgets/feedback_dialog.dart';
 
 class WalletScreen extends StatelessWidget {
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color _primaryOrange(BuildContext context) => const Color(0xFFFF6B00);
+  Color _surfaceColor(BuildContext context) => Theme.of(context).colorScheme.surface;
+  Color _containerColor(BuildContext context) => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color _cardColor(BuildContext context) => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color _textColor(BuildContext context) => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   @override
   Widget build(BuildContext context) {
     final wallet = Provider.of<WalletProvider>(context);
 
     return Scaffold(
-      backgroundColor: Color(0xFFF5F6F9),
+      backgroundColor: _containerColor(context),
       appBar: AppBar(
-        title: Text("My Wallet", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold)),
+        title: Text("My Wallet", style: GoogleFonts.poppins(color: _textColor(context), fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: textDark),
+        iconTheme: IconThemeData(color: _textColor(context)),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(20),
@@ -35,9 +38,12 @@ class WalletScreen extends StatelessWidget {
               width: double.infinity,
               padding: EdgeInsets.all(25),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [textDark, Color(0xFF333333)]),
+                gradient: LinearGradient(colors: [
+                  Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333),
+                  Theme.of(context).brightness == Brightness.light ? const Color(0xFF333333) : const Color(0xFF444444)
+                ]),
                 borderRadius: BorderRadius.circular(25),
-                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))]
+                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))]
               ),
               child: Column(
                 children: [
@@ -47,7 +53,7 @@ class WalletScreen extends StatelessWidget {
                   SizedBox(height: 20),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryOrange,
+                      backgroundColor: _primaryOrange(context),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                       padding: EdgeInsets.symmetric(horizontal: 25, vertical: 12)
                     ),
@@ -59,9 +65,9 @@ class WalletScreen extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 30),
-            Align(alignment: Alignment.centerLeft, child: Text("History", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18))),
-            SizedBox(height: 15),
+            const SizedBox(height: 30),
+            Align(alignment: Alignment.centerLeft, child: Text("History", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, color: _textColor(context)))),
+            const SizedBox(height: 15),
 
             // 2. Transaction History
             wallet.history.isEmpty 
@@ -82,7 +88,8 @@ itemBuilder: (ctx, i) {
 
   return Card(
     elevation: 0,
-    margin: EdgeInsets.only(bottom: 10),
+    color: _cardColor(ctx),
+    margin: const EdgeInsets.only(bottom: 10),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
     child: ListTile(
       leading: CircleAvatar(
@@ -93,7 +100,7 @@ itemBuilder: (ctx, i) {
           size: 20,
         ),
       ),
-      title: Text(tx['description'], style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
+      title: Text(tx['description'], style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14, color: _textColor(ctx))),
       subtitle: Text(
         "${date.day}/${date.month} - ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}",
         style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
@@ -106,7 +113,7 @@ itemBuilder: (ctx, i) {
             "${isDeposit ? '+' : ''}${tx['amount'].toStringAsFixed(2)}",
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
-              color: isDeposit ? Colors.green : Colors.black,
+              color: isDeposit ? Colors.green : _textColor(ctx),
             ),
           ),
           SizedBox(height: 4),
@@ -178,7 +185,8 @@ itemBuilder: (ctx, i) {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Top Up Wallet", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        backgroundColor: _surfaceColor(context),
+        title: Text("Top Up Wallet", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor(context))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -187,9 +195,11 @@ itemBuilder: (ctx, i) {
             TextField(
               controller: phoneCtrl, 
               keyboardType: TextInputType.phone,
+              style: GoogleFonts.poppins(color: _textColor(context)),
               decoration: InputDecoration(
                 labelText: "M-Pesa Number", 
-                prefixIcon: Icon(Icons.phone, color: primaryOrange),
+                labelStyle: GoogleFonts.poppins(color: Colors.grey),
+                prefixIcon: Icon(Icons.phone, color: _primaryOrange(context)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))
               )
             ),
@@ -197,19 +207,22 @@ itemBuilder: (ctx, i) {
             TextField(
               controller: amountCtrl, 
               keyboardType: TextInputType.number,
+              style: GoogleFonts.poppins(color: _textColor(context)),
               decoration: InputDecoration(
                 labelText: "Amount (Min 50)", 
-                prefixIcon: Icon(Icons.money, color: primaryOrange),
+                labelStyle: GoogleFonts.poppins(color: Colors.grey),
+                prefixIcon: Icon(Icons.money, color: _primaryOrange(context)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))
               )
             ),
+            SizedBox(height: 20),
           ],
         ),
         actions: [
           TextButton(child: Text("Cancel", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: textDark),
-            child: Text("Pay Now", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF444444)),
+            child: const Text("Pay Now", style: TextStyle(color: Colors.white)),
             onPressed: () async {
   double amount = double.tryParse(amountCtrl.text) ?? 0;
   if (amount < 50) {
@@ -235,6 +248,7 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
 );
   
   if (invoiceId != null) {
+    if (!ctx.mounted) return;
     _showListeningDialog(context, invoiceId, amount);
   } else {
     FeedbackDialog.show(context, title: "Failed", message: "Could not send request.", isSuccess: false);
@@ -274,12 +288,13 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
 
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                backgroundColor: _surfaceColor(context),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 60),
-                    SizedBox(height: 20),
-                    Text("Payment Confirmed!", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                    const Icon(Icons.check_circle, color: Colors.green, size: 60),
+                    const SizedBox(height: 20),
+                    Text("Payment Confirmed!", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor(context))),
                   ],
                 ),
               );
@@ -288,10 +303,11 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
             // ❌ FAILED
             if (status == "FAILED") {
               return AlertDialog(
-                title: Text("Payment Failed"),
-                content: Text("The transaction was cancelled or failed."),
+                backgroundColor: _surfaceColor(context),
+                title: Text("Payment Failed", style: GoogleFonts.poppins(color: _textColor(context))),
+                content: Text("The transaction was cancelled or failed.", style: GoogleFonts.poppins(color: Colors.grey)),
                 actions: [
-                  TextButton(child: Text("Close"), onPressed: () => Navigator.pop(ctx))
+                  TextButton(child: const Text("Close"), onPressed: () => Navigator.pop(ctx))
                 ],
               );
             }
@@ -299,17 +315,18 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
             // ⏳ WAITING
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: _surfaceColor(context),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: primaryOrange),
-                  SizedBox(height: 20),
-                  Text("Waiting for M-Pesa...", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  SizedBox(height: 10),
+                  CircularProgressIndicator(color: _primaryOrange(context)),
+                  const SizedBox(height: 20),
+                  Text("Waiting for M-Pesa...", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor(context))),
+                  const SizedBox(height: 10),
                   Text("Please enter your PIN", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-                  SizedBox(height: 20),
+                  const SizedBox(height: 20),
                   TextButton(
-                    child: Text("Cancel", style: TextStyle(color: Colors.red)),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.red)),
                     onPressed: () => Navigator.pop(ctx),
                   )
                 ],

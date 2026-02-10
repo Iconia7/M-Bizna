@@ -13,10 +13,12 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   @override
   void initState() {
@@ -74,19 +76,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (maxVal == 0) maxVal = 1; // Prevent division by zero
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _containerColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _containerColor,
         elevation: 0,
         centerTitle: false,
-        title: Text("Analytics", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold, fontSize: 24)),
+        title: Text("Analytics", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh, color: textDark),
+            icon: Icon(Icons.refresh, color: _textColor),
             onPressed: () => Provider.of<ReportProvider>(context, listen: false).loadDashboardStats(),
           ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.print, color: textDark),
+            icon: Icon(Icons.print, color: _textColor),
             onSelected: _exportReport,
             itemBuilder: (ctx) => [
               PopupMenuItem(value: 'week', child: Text("Print Weekly Report")),
@@ -107,18 +109,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   title: "Total Profit",
                   value: "KES ${reports.todayProfit.toStringAsFixed(0)}",
                   icon: Icons.trending_up,
-                  color: textDark,
+                  color: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF444444),
                   textColor: Colors.white,
-                  iconColor: primaryOrange,
+                  iconColor: _primaryOrange,
                 ),
-                SizedBox(width: 15),
+                const SizedBox(width: 15),
                 _buildSummaryCard(
                   title: "Total Sales",
                   value: "KES ${reports.todaySales.toStringAsFixed(0)}",
                   icon: Icons.attach_money,
-                  color: Colors.white,
-                  textColor: textDark,
-                  iconColor: textDark,
+                  color: _cardColor,
+                  textColor: _textColor,
+                  iconColor: _textColor,
                 ),
               ],
             ),
@@ -127,16 +129,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
             // 2. Real Weekly Chart
             Container(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _cardColor,
                 borderRadius: BorderRadius.circular(25),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: Offset(0, 5))],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Weekly Revenue", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: textDark)),
+                  Text("Weekly Revenue", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: _textColor)),
                   SizedBox(height: 25),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -158,8 +160,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             SizedBox(height: 25),
 
             // 3. Real Recent Transactions
-            Text("Recent Sales", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
-            SizedBox(height: 15),
+            Text("Recent Sales", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+            const SizedBox(height: 15),
 
             transactions.isEmpty
               ? Center(
@@ -176,25 +178,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   itemBuilder: (ctx, i) {
                     final tx = transactions[i];
                     return Container(
-                      padding: EdgeInsets.all(15),
+                      padding: const EdgeInsets.all(15),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _cardColor,
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.03), blurRadius: 10, offset: Offset(0, 4))]
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
                       ),
                       child: Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: cardGray, shape: BoxShape.circle),
-                            child: Icon(Icons.receipt_long, color: textDark, size: 20),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: _containerColor, shape: BoxShape.circle),
+                            child: Icon(Icons.receipt_long, color: _textColor, size: 20),
                           ),
-                          SizedBox(width: 15),
+                          const SizedBox(width: 15),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(tx['name'], style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark), overflow: TextOverflow.ellipsis),
+                                Text(tx['name'], style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor), overflow: TextOverflow.ellipsis),
                                 Text("${tx['quantity']} items • ${tx['time']}", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12)),
                               ],
                             ),
@@ -224,14 +226,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(25),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: Offset(0, 5))],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 5))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(color: textColor == Colors.white ? Colors.white.withOpacity(0.2) : cardGray, shape: BoxShape.circle),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: textColor == Colors.white ? Colors.white.withOpacity(0.2) : _containerColor, shape: BoxShape.circle),
               child: Icon(icon, color: iconColor, size: 18),
             ),
             SizedBox(height: 20),
@@ -255,14 +257,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: Stack(
             alignment: Alignment.bottomCenter,
             children: [
-              Container(decoration: BoxDecoration(color: cardGray, borderRadius: BorderRadius.circular(10))),
+              Container(decoration: BoxDecoration(color: _containerColor, borderRadius: BorderRadius.circular(10))),
               FractionallySizedBox(
                 heightFactor: safeHeight,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isHigh ? primaryOrange : textDark.withOpacity(0.8),
+                    color: isHigh ? _primaryOrange : _textColor.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: isHigh ? [BoxShadow(color: primaryOrange.withOpacity(0.4), blurRadius: 8, offset: Offset(0, 2))] : [],
+                    boxShadow: isHigh ? [BoxShadow(color: _primaryOrange.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 2))] : [],
                   ),
                 ),
               ),

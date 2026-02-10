@@ -14,9 +14,12 @@ class ExpenseScreen extends StatefulWidget {
 }
 
 class _ExpenseScreenState extends State<ExpenseScreen> {
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   @override
   void initState() {
@@ -36,26 +39,44 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("Add Expense", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          title: Text("Add Expense", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+          backgroundColor: _surfaceColor,
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: descController,
-                  decoration: const InputDecoration(labelText: "Description", hintText: "e.g. Electricity Bill"),
+                  style: GoogleFonts.poppins(color: _textColor),
+                  decoration: InputDecoration(
+                    labelText: "Description", 
+                    labelStyle: GoogleFonts.poppins(color: Colors.grey),
+                    hintText: "e.g. Electricity Bill",
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
+                  ),
                 ),
                 const SizedBox(height: 15),
                 TextField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "Amount (KES)", hintText: "0.00"),
+                  style: GoogleFonts.poppins(color: _textColor),
+                  decoration: InputDecoration(
+                    labelText: "Amount (KES)", 
+                    labelStyle: GoogleFonts.poppins(color: Colors.grey),
+                    hintText: "0.00",
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
+                  ),
                 ),
                 const SizedBox(height: 15),
                 DropdownButtonFormField<String>(
                   value: selectedCategory,
-                  decoration: const InputDecoration(labelText: "Category"),
-                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  dropdownColor: _cardColor,
+                  style: GoogleFonts.poppins(color: _textColor),
+                  decoration: InputDecoration(
+                    labelText: "Category",
+                    labelStyle: GoogleFonts.poppins(color: Colors.grey),
+                  ),
+                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.poppins(color: _textColor)))).toList(),
                   onChanged: (val) => setDialogState(() => selectedCategory = val!),
                 ),
               ],
@@ -64,7 +85,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+              style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange),
               onPressed: () {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 if (descController.text.isNotEmpty && amount > 0) {
@@ -91,10 +112,12 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _containerColor,
       appBar: AppBar(
-        title: const Text("Expense Tracker"),
-        backgroundColor: cardGray,
+        title: Text("Expense Tracker", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+        backgroundColor: _containerColor,
+        elevation: 0,
+        iconTheme: IconThemeData(color: _textColor),
       ),
       body: Consumer<ExpenseProvider>(
         builder: (context, provider, _) {
@@ -118,7 +141,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 padding: const EdgeInsets.all(25),
                 margin: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: textDark,
+                  color: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333),
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Column(
@@ -141,23 +164,23 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _cardColor,
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: cardGray, shape: BoxShape.circle),
-                            child: Icon(_getCategoryIcon(expense.category), color: primaryOrange),
+                            decoration: BoxDecoration(color: _containerColor, shape: BoxShape.circle),
+                            child: Icon(_getCategoryIcon(expense.category), color: _primaryOrange),
                           ),
                           const SizedBox(width: 15),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(expense.description, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+                                Text(expense.description, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
                                 Text(DateFormat('MMM dd, yyyy').format(expense.dateTime), style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12)),
                               ],
                             ),
@@ -180,7 +203,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddExpenseDialog,
-        backgroundColor: primaryOrange,
+        backgroundColor: _primaryOrange,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

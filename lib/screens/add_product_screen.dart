@@ -32,9 +32,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String _selectedUnit = 'Pcs';
   final List<String> _units = ['Pcs', 'Kg', 'Litre', 'Bunch', 'Packet', 'Dozen'];
 
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F8);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F8) : Colors.white.withOpacity(0.05);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   @override
   void initState() {
@@ -130,10 +133,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: primaryOrange.withOpacity(0.1),
+              color: _primaryOrange.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: primaryOrange, size: 30),
+            child: Icon(icon, color: _primaryOrange, size: 30),
           ),
           const SizedBox(height: 8),
           Text(label, style: GoogleFonts.poppins(fontSize: 14)),
@@ -144,7 +147,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Future<void> _scanBarcode() async {
     final scannedCode = await Navigator.push(
-        context, MaterialPageRoute(builder: (context) => SimpleScannerPage()));
+    );
+    
+    if (!mounted) return;
+
     if (scannedCode != null) {
       setState(() {
         _barcodeController.text = scannedCode;
@@ -193,13 +199,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final isEditMode = widget.productToEdit != null;
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _containerColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _containerColor,
         elevation: 0,
-        iconTheme: IconThemeData(color: textDark),
+        iconTheme: IconThemeData(color: _textColor),
         title: Text(isEditMode ? 'Edit Product' : 'New Product',
-            style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold)),
+            style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -233,7 +239,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.camera_alt_outlined,
-                                    color: primaryOrange, size: 30),
+                                    color: _primaryOrange, size: 30),
                                 SizedBox(height: 5),
                                 Text("Add Photo",
                                     style: GoogleFonts.poppins(
@@ -258,7 +264,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.qr_code_scanner, color: primaryOrange),
+                            icon: Icon(Icons.qr_code_scanner, color: _primaryOrange),
                             onPressed: _scanBarcode,
                           ),
                           IconButton(
@@ -326,11 +332,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: textDark,
+                    backgroundColor: _textColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     elevation: 5,
-                    shadowColor: textDark.withOpacity(0.3),
+                    shadowColor: _textColor.withOpacity(0.3),
                   ),
                   onPressed: _saveProduct,
                   child: Text(
@@ -371,7 +377,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         keyboardType: isNumber
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: textDark),
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor),
         validator: (val) => val!.isEmpty ? 'Required' : null,
         decoration: InputDecoration(
           labelText: label,

@@ -28,11 +28,21 @@ class _DashboardTabState extends State<DashboardTab> {
   Future<void> _loadData() async {
     final shop = Provider.of<ShopProvider>(context, listen: false);
     await shop.refreshProStatus();
+    if (!mounted) return;
     await Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
+    if (!mounted) return;
     await Provider.of<InventoryProvider>(context, listen: false).loadProducts(isPro: shop.isProActive);
+    if (!mounted) return;
     final shopId = shop.shopId;
     Provider.of<WalletProvider>(context, listen: false).startBalanceListener(shopId);
   }
+
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   String getGreeting() {
     var hour = DateTime.now().hour;
@@ -48,22 +58,17 @@ class _DashboardTabState extends State<DashboardTab> {
     final wallet = Provider.of<WalletProvider>(context);
     final shop = Provider.of<ShopProvider>(context);
 
+
     // Live Calculations
     double totalStockValue = inventory.products.fold(0, (sum, item) => sum + (item.buyPrice * item.stockQty));
     int totalItems = inventory.products.length;
     int outOfStock = inventory.products.where((i) => i.stockQty == 0).length;
 
-    // 🎨 YOUR THEME COLORS
-    const Color primaryOrange = Color(0xFFFF6B00);
-    const Color textDark = Color(0xFF1A1A1A);
-    const Color cardGray = Color(0xFFF5F6F9);
-    const Color bgWhite = Color(0xFFFFFFFF);
-
     return Scaffold(
-      backgroundColor: cardGray, // Matches your theme's grey background
+      backgroundColor: _containerColor, // Matches your theme's grey background
       body: RefreshIndicator(
         onRefresh: _loadData,
-        color: primaryOrange,
+        color: _primaryOrange,
         child: SingleChildScrollView(
           physics: AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -85,7 +90,7 @@ class _DashboardTabState extends State<DashboardTab> {
               style: GoogleFonts.poppins(
                 fontSize: 22, 
                 fontWeight: FontWeight.bold, 
-                color: textDark
+                color: _textColor
               )
             ),
             const SizedBox(width: 8),
@@ -125,12 +130,12 @@ class _DashboardTabState extends State<DashboardTab> {
                   GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen())),
                     child: Container(
-                      padding: EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: primaryOrange, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(color: _primaryOrange, shape: BoxShape.circle),
                       child: Container(
                         height: 45, width: 45,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _cardColor,
                           shape: BoxShape.circle,
                           image: DecorationImage(image: NetworkImage("https://ui-avatars.com/api/?name=${shop.shopName}&background=1A1A1A&color=fff"), fit: BoxFit.cover)
                         ),
@@ -143,7 +148,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
               // 2. Hero Card (The "Bizna Card" in Orange)
               if (shop.isOwner) 
-                _buildCreativeHeroCard(totalStockValue, primaryOrange, shop.isProActive),
+                _buildCreativeHeroCard(totalStockValue, _primaryOrange, shop.isProActive),
               
               if (shop.isOwner) 
                 const SizedBox(height: 25),
@@ -152,9 +157,9 @@ class _DashboardTabState extends State<DashboardTab> {
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WalletScreen())),
                 child: Container(
                   width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: _cardColor,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
@@ -166,10 +171,10 @@ class _DashboardTabState extends State<DashboardTab> {
                       Container(
                         padding: EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Color(0xFFFF6B00).withOpacity(0.1),
+                          color: _primaryOrange.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.account_balance_wallet, color: Color(0xFFFF6B00), size: 24),
+                        child: Icon(Icons.account_balance_wallet, color: _primaryOrange, size: 24),
                       ),
                       SizedBox(width: 15),
                       // Text Info
@@ -179,7 +184,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           Text("App Balance", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
                           Text(
                             "KES ${wallet.balance.toStringAsFixed(2)}", 
-                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))
+                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)
                           ),
                         ],
                       ),
@@ -188,7 +193,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Color(0xFF1A1A1A),
+                          color: _textColor,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -206,18 +211,17 @@ class _DashboardTabState extends State<DashboardTab> {
               // 3. Stats Row (Clean White Pills)
               Row(
                 children: [
-                  _buildStatPill("Total Items", "$totalItems", textDark, bgWhite, Icons.widgets_outlined),
-                  SizedBox(width: 15),
-                  _buildStatPill("Stockout", "$outOfStock", Colors.redAccent, bgWhite, Icons.warning_amber_rounded),
-                  SizedBox(width: 15),
-                  _buildStatPill("Low Stock", "${reports.lowStockItems}", primaryOrange, bgWhite, Icons.trending_down),
+                  _buildStatPill("Total Items", "$totalItems", _textColor, _cardColor, Icons.widgets_outlined),
+                  const SizedBox(width: 15),
+                  _buildStatPill("Stockout", "$outOfStock", Colors.redAccent, _cardColor, Icons.warning_amber_rounded),
+                  const SizedBox(width: 15),
+                  _buildStatPill("Low Stock", "${reports.lowStockItems}", _primaryOrange, _cardColor, Icons.trending_down),
                 ],
               ),
               
-              SizedBox(height: 30),
-
+              const SizedBox(height: 30),
               // 4. Quick Actions (Bento Grid)
-              Text("Quick Actions", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
+              Text("Quick Actions", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
               SizedBox(height: 15),
               
               // Use IntrinsicHeight to prevent overflow errors
@@ -232,9 +236,9 @@ class _DashboardTabState extends State<DashboardTab> {
                     title: "POS Terminal",
                     subtitle: "New Sale",
                     icon: Icons.qr_code_scanner,
-                    bgColor: textDark,       // Dark card
+                    bgColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333), 
                     textColor: Colors.white, // White text
-                    iconColor: primaryOrange,// Orange icon
+                    iconColor: _primaryOrange,// Orange icon
                     isTall: true,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => POSScreen())),
                   ),
@@ -250,9 +254,9 @@ class _DashboardTabState extends State<DashboardTab> {
                           title: "Add Item",
                           subtitle: "",
                           icon: Icons.add,
-                          bgColor: bgWhite,
-                          textColor: textDark,
-                          iconColor: primaryOrange,
+                          bgColor: _cardColor,
+                          textColor: _textColor,
+                          iconColor: _primaryOrange,
                           isTall: false,
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => AddProductScreen())),
                         ),
@@ -264,8 +268,8 @@ class _DashboardTabState extends State<DashboardTab> {
                             title: "Deni Manager",
                             subtitle: "Track Debt",
                             icon: Icons.people_alt_outlined,
-                            bgColor: bgWhite,
-                            textColor: textDark,
+                            bgColor: _cardColor,
+                            textColor: _textColor,
                             iconColor: Colors.blue, 
                             isTall: false,
                             onTap: () async {
@@ -291,8 +295,8 @@ class _DashboardTabState extends State<DashboardTab> {
                       title: "Expenses ${shop.isProActive ? '' : '🔒'}",
                       subtitle: shop.isProActive ? "Business Cost" : "Pro Feature",
                       icon: Icons.receipt_long_outlined,
-                      bgColor: Colors.white,
-                      textColor: shop.isProActive ? const Color(0xFF1A1A1A) : Colors.grey,
+                      bgColor: _cardColor,
+                      textColor: shop.isProActive ? _textColor : Colors.grey,
                       iconColor: shop.isProActive ? Colors.redAccent : Colors.grey,
                       isTall: false,
                       onTap: () {
@@ -310,8 +314,8 @@ class _DashboardTabState extends State<DashboardTab> {
                       title: "Reports ${shop.isProActive ? '' : '🔒'}",
                       subtitle: shop.isProActive ? "Sales Analytics" : "Pro Feature",
                       icon: Icons.bar_chart_outlined,
-                      bgColor: Colors.white,
-                      textColor: shop.isProActive ? const Color(0xFF1A1A1A) : Colors.grey,
+                      bgColor: _cardColor,
+                      textColor: shop.isProActive ? _textColor : Colors.grey,
                       iconColor: shop.isProActive ? Colors.green : Colors.grey,
                       isTall: false,
                       onTap: () {
@@ -404,8 +408,8 @@ class _DashboardTabState extends State<DashboardTab> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: iconColor, size: 24),
-            Spacer(),
-            Text(value, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
+            const Spacer(),
+            Text(value, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: _textColor)),
             Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
           ],
         ),

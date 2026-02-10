@@ -28,10 +28,12 @@ class POSScreen extends StatefulWidget {
 }
 
 class _POSScreenState extends State<POSScreen> {
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : Colors.white.withOpacity(0.05);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   // --- 1. CORE POS LOGIC (Scanning & Cart) ---
 
@@ -47,8 +49,8 @@ class _POSScreenState extends State<POSScreen> {
         builder: (_, controller) {
           return Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(20).copyWith(bottomLeft: Radius.zero, bottomRight: Radius.zero),
             ),
             child: Column(
               children: [
@@ -61,7 +63,7 @@ class _POSScreenState extends State<POSScreen> {
                 // Title
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Text("Quick Select", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
+                  child: Text("Quick Select", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
                 ),
                 // Search Bar - We will implement a simple filter locally
                 Padding(
@@ -69,11 +71,12 @@ class _POSScreenState extends State<POSScreen> {
                   child: TextField(
                     decoration: InputDecoration(
                       hintText: "Search items (e.g. Sugar, Rice)...",
-                      prefixIcon: Icon(Icons.search, color: Colors.grey),
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
                       filled: true,
-                      fillColor: cardGray,
+                      fillColor: _containerColor,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                      contentPadding: EdgeInsets.symmetric(vertical: 0)
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0)
                     ),
                     onChanged: (val) {
                       // In a real app, update the list state here
@@ -108,10 +111,10 @@ class _POSScreenState extends State<POSScreen> {
                             },
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: _cardColor,
                                 borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: cardGray),
-                                boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 5)]
+                                border: Border.all(color: _containerColor),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -119,8 +122,8 @@ class _POSScreenState extends State<POSScreen> {
                                   // Icon / Image
                                   Container(
                                     height: 40, width: 40,
-                                    decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
-                                    child: Center(child: Text(product.name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: primaryOrange))),
+                                    decoration: BoxDecoration(color: _primaryOrange.withOpacity(0.1), shape: BoxShape.circle),
+                                    child: Center(child: Text(product.name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: _primaryOrange))),
                                   ),
                                   SizedBox(height: 10),
                                   // Name
@@ -177,7 +180,7 @@ class _POSScreenState extends State<POSScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Unknown Item", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textDark)),
+        title: Text("Unknown Item", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
         content: Text("Add this item to inventory now?", style: GoogleFonts.poppins(color: Colors.grey)),
         actions: [
           TextButton(
@@ -185,8 +188,8 @@ class _POSScreenState extends State<POSScreen> {
             onPressed: () => Navigator.pop(ctx),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: textDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: Text("Add Now", style: GoogleFonts.poppins(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: _textColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: Text("Add Now", style: GoogleFonts.poppins(color: _surfaceColor)),
             onPressed: () async {
               Navigator.pop(ctx);
               final newProduct = await Navigator.push(
@@ -218,7 +221,7 @@ void _showManualMpesaInstruction(String? phoneNumber) {
         children: [
           Text("Ask customer to pay to:"),
           SizedBox(height: 10),
-          Text(phoneNumber ?? "No Number Set", style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: primaryOrange)),
+          Text(phoneNumber ?? "No Number Set", style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: _primaryOrange)),
           SizedBox(height: 20),
           Text("Once you receive the M-Pesa SMS, click confirm to finish.", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
         ],
@@ -268,6 +271,7 @@ Future<void> _paySubscription() async {
   );
 
   if (invoiceId != null) {
+    if (!mounted) return;
     // Show the same listening dialog we use for sales
     _showListeningDialog(invoiceId);
   } else {
@@ -290,7 +294,11 @@ void _handleCheckout() async {
     backgroundColor: Colors.transparent,
     builder: (ctx) => Container(
       padding: EdgeInsets.all(25),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      decoration: BoxDecoration(
+        color: _surfaceColor, 
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -366,19 +374,20 @@ void _handleCheckout() async {
               controller: phoneController,
               keyboardType: TextInputType.phone,
               autofocus: true,
+              style: TextStyle(color: _textColor),
               decoration: InputDecoration(
                 hintText: "07XX XXX XXX",
                 filled: true,
-                fillColor: cardGray,
+                fillColor: _containerColor,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                prefixIcon: Icon(Icons.dialpad, color: primaryOrange),
+                prefixIcon: Icon(Icons.dialpad, color: _primaryOrange),
               ),
             ),
           ],
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             child: Text("Request Payment", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
             onPressed: () async {
   final sales = Provider.of<SalesProvider>(context, listen: false);
@@ -398,6 +407,7 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
 );
 
   if (invoiceId != null) {
+    if (!mounted) return;
     _showListeningDialog(invoiceId);
   } else {
     FeedbackDialog.show(context, title: "Error", message: "Connection failed.", isSuccess: false);
@@ -489,7 +499,7 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: primaryOrange),
+                  CircularProgressIndicator(color: _primaryOrange),
                   SizedBox(height: 25),
                   Text("Waiting for M-Pesa...", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   SizedBox(height: 10),
@@ -520,7 +530,7 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
         autofocus: true,
         decoration: InputDecoration(
           filled: true,
-          fillColor: cardGray,
+          fillColor: _containerColor,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           suffixText: unit,
         ),
@@ -528,7 +538,7 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+          style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange),
           onPressed: () {
             final newQty = double.tryParse(controller.text) ?? currentQty;
             Provider.of<SalesProvider>(context, listen: false).updateQuantity(barcode, newQty);
@@ -672,12 +682,12 @@ void _finalizeSale(String method) async {
     final sales = Provider.of<SalesProvider>(context);
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _surfaceColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _surfaceColor,
         elevation: 0,
         centerTitle: false,
-        title: Text("Terminal", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold, fontSize: 24)),
+        title: Text("Terminal", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
         actions: [
           if (sales.cart.isNotEmpty)
             IconButton(
@@ -700,14 +710,14 @@ void _finalizeSale(String method) async {
                       final cartItem = sales.cart.values.toList()[i];
                       return Container(
                         padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))]),
+                        decoration: BoxDecoration(color: _cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))]),
                         child: Row(
                           children: [
-                            Container(width: 60, height: 60, decoration: BoxDecoration(color: cardGray, borderRadius: BorderRadius.circular(15), image: cartItem.product.imagePath != null ? DecorationImage(image: FileImage(File(cartItem.product.imagePath!)), fit: BoxFit.cover) : null), child: cartItem.product.imagePath == null ? Icon(Icons.shopping_bag_outlined, color: Colors.grey.shade400) : null),
+                            Container(width: 60, height: 60, decoration: BoxDecoration(color: _containerColor, borderRadius: BorderRadius.circular(15), image: cartItem.product.imagePath != null ? DecorationImage(image: FileImage(File(cartItem.product.imagePath!)), fit: BoxFit.cover) : null), child: cartItem.product.imagePath == null ? Icon(Icons.shopping_bag_outlined, color: Colors.grey.shade400) : null),
                             SizedBox(width: 15),
-                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(cartItem.product.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: textDark)), Text("KES ${cartItem.product.sellPrice}", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13))])),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(cartItem.product.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)), Text("KES ${cartItem.product.sellPrice}", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13))])),
                             Container(
-  decoration: BoxDecoration(color: cardGray, borderRadius: BorderRadius.circular(30)),
+  decoration: BoxDecoration(color: _containerColor, borderRadius: BorderRadius.circular(30)),
   child: Row(
     children: [
       _qtyBtn(Icons.remove, () => sales.removeSingleItem(cartItem.product.barcode)),
@@ -723,7 +733,7 @@ void _finalizeSale(String method) async {
           child: Text(
             // Format to show decimals only when they exist (e.g. 1.5 instead of 1.50)
             cartItem.quantity.toStringAsFixed(cartItem.quantity.truncateToDouble() == cartItem.quantity ? 0 : 2),
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textDark),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor),
           ),
         ),
       ),
@@ -741,16 +751,20 @@ void _finalizeSale(String method) async {
           // 2. Checkout Dock
           Container(
             padding: EdgeInsets.all(25),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 30, offset: Offset(0, -5))]),
+            decoration: BoxDecoration(
+              color: _surfaceColor, 
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)), 
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 30, offset: const Offset(0, -5))]
+            ),
             child: SafeArea(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Total", style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey)), Text("KES ${sales.totalAmount.toStringAsFixed(0)}", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: textDark))]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Total", style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey)), Text("KES ${sales.totalAmount.toStringAsFixed(0)}", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: _textColor))]),
                   SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(flex: 1, child: GestureDetector(onTap: () => _scanAndAddToCart(context), child: Container(height: 55, decoration: BoxDecoration(color: cardGray, borderRadius: BorderRadius.circular(18)), child: Icon(Icons.qr_code_scanner, color: textDark)))),
+                      Expanded(flex: 1, child: GestureDetector(onTap: () => _scanAndAddToCart(context), child: Container(height: 55, decoration: BoxDecoration(color: _containerColor, borderRadius: BorderRadius.circular(18)), child: Icon(Icons.qr_code_scanner, color: _textColor)))),
                       SizedBox(width: 15),
                       Expanded(
                         flex: 1, 
@@ -768,7 +782,7 @@ void _finalizeSale(String method) async {
                       Expanded(
                         flex: 3,
                         child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, foregroundColor: Colors.white, elevation: 0, fixedSize: Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)), shadowColor: primaryOrange.withOpacity(0.4)),
+                          style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange, foregroundColor: Colors.white, elevation: 0, fixedSize: Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)), shadowColor: _primaryOrange.withOpacity(0.4)),
                           onPressed: sales.cart.isEmpty ? null : _handleCheckout, // 👈 Calls our new Logic
                           child: Text("Checkout", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
@@ -791,7 +805,24 @@ void _finalizeSale(String method) async {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(padding: EdgeInsets.all(25), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(Icons.point_of_sale, size: 60, color: Colors.grey.shade300)), SizedBox(height: 20), Text("Ready to Sell?", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade400)), SizedBox(height: 10), TextButton.icon(onPressed: () => _scanAndAddToCart(context), icon: Icon(Icons.qr_code_scanner, color: primaryOrange), label: Text("Scan First Item", style: GoogleFonts.poppins(color: primaryOrange, fontWeight: FontWeight.bold)))])
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, 
+        children: [
+          Container(
+            padding: EdgeInsets.all(25), 
+            decoration: BoxDecoration(color: _cardColor, shape: BoxShape.circle), 
+            child: Icon(Icons.point_of_sale, size: 60, color: Colors.grey.shade300)
+          ), 
+          SizedBox(height: 20), 
+          Text("Ready to Sell?", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade400)), 
+          SizedBox(height: 10), 
+          TextButton.icon(
+            onPressed: () => _scanAndAddToCart(context), 
+            icon: Icon(Icons.qr_code_scanner, color: _primaryOrange), 
+            label: Text("Scan First Item", style: GoogleFonts.poppins(color: _primaryOrange, fontWeight: FontWeight.bold))
+          )
+        ]
+      )
     );
   }
 }

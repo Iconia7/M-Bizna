@@ -9,17 +9,18 @@ class LegalScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212),
       appBar: AppBar(
-        title: Text(type == 'Terms' ? "Terms of Service" : "Privacy Policy", style: GoogleFonts.poppins(color: Colors.black)),
-        backgroundColor: Colors.white,
+        title: Text(type == 'Terms' ? "Terms of Service" : "Privacy Policy", style: GoogleFonts.poppins(color: Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A)),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(20),
         child: Text(
           type == 'Terms' ? _termsText : _privacyText,
-          style: GoogleFonts.poppins(fontSize: 14, height: 1.5),
+          style: GoogleFonts.poppins(fontSize: 14, height: 1.5, color: Theme.of(context).textTheme.bodyLarge?.color),
         ),
       ),
     );

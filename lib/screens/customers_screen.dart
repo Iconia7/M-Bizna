@@ -11,10 +11,12 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
   static const Color whatsappGreen = Color(0xFF25D366);
 
   @override
@@ -32,7 +34,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Add Customer", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textDark)),
+        backgroundColor: _surfaceColor,
+        title: Text("Add Customer", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -50,7 +53,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: textDark,
+              backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF444444),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
             ),
             child: Text("Save Customer", style: GoogleFonts.poppins(color: Colors.white)),
@@ -76,12 +79,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
     return TextField(
       controller: ctrl,
       keyboardType: isNumber ? TextInputType.phone : TextInputType.text,
+      style: GoogleFonts.poppins(color: _textColor),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.poppins(fontSize: 12),
-        prefixIcon: Icon(icon, color: primaryOrange, size: 18),
+        labelStyle: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+        prefixIcon: Icon(icon, color: _primaryOrange, size: 18),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.withOpacity(0.3))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _primaryOrange)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
       ),
     );
   }
@@ -92,13 +98,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final customers = customerProvider.customers;
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _containerColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _containerColor,
         elevation: 0,
         centerTitle: false,
-        title: Text("Deni Manager", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold, fontSize: 24)),
-        iconTheme: IconThemeData(color: textDark),
+        title: Text("Deni Manager", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
+        iconTheme: IconThemeData(color: _textColor),
       ),
       body: customers.isEmpty
           ? Center(
@@ -121,11 +127,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 final debtRatio = (customer.currentDebt / customer.creditLimit).clamp(0.0, 1.0);
 
                 return Container(
-                  padding: EdgeInsets.all(15),
+                  padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: _cardColor,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                     border: isHighRisk ? Border.all(color: Colors.red.withOpacity(0.3), width: 1.5) : null
                   ),
                   child: Row(
@@ -134,7 +140,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       Container(
                         width: 50, height: 50,
                         decoration: BoxDecoration(
-                          color: isHighRisk ? Colors.red.shade50 : cardGray,
+                          color: isHighRisk ? Colors.red.withOpacity(0.1) : _containerColor,
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -143,7 +149,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold, 
                               fontSize: 20, 
-                              color: isHighRisk ? Colors.red : textDark
+                              color: isHighRisk ? Colors.red : _textColor
                             ),
                           ),
                         ),
@@ -156,7 +162,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(customer.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16, color: textDark)),
+                            Text(customer.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16, color: _textColor)),
                             Text(customer.phone, style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12)),
                             SizedBox(height: 8),
                             
@@ -168,8 +174,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                     borderRadius: BorderRadius.circular(5),
                                     child: LinearProgressIndicator(
                                       value: debtRatio,
-                                      backgroundColor: cardGray,
-                                      color: isHighRisk ? Colors.red : (debtRatio > 0.5 ? primaryOrange : Colors.green),
+                                      backgroundColor: _containerColor,
+                                      color: isHighRisk ? Colors.red : (debtRatio > 0.5 ? _primaryOrange : Colors.green),
                                       minHeight: 6,
                                     ),
                                   ),
@@ -225,10 +231,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: textDark, // Matches theme (Deep Black)
+        backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333),
         elevation: 5,
         onPressed: _showAddCustomerDialog,
-        child: Icon(Icons.person_add, color: Colors.white),
+        child: const Icon(Icons.person_add, color: Colors.white),
       ),
     );
   }

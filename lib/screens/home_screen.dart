@@ -91,10 +91,10 @@ void _onItemTapped(int index) async {
         children: _pages,
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.symmetric(vertical: 0),
-        margin: EdgeInsets.fromLTRB(20, 0, 20, 25), 
+        padding: const EdgeInsets.symmetric(vertical: 0),
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 25), 
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(30), 
           boxShadow: [
             BoxShadow(
@@ -107,7 +107,7 @@ void _onItemTapped(int index) async {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
           child: BottomNavigationBar(
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             type: BottomNavigationBarType.fixed,
             elevation: 0,
             showSelectedLabels: true,
@@ -141,9 +141,9 @@ void _onItemTapped(int index) async {
               // THE "SELL" BUTTON (Highlighted Center)
               BottomNavigationBarItem(
                 icon: Container(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _selectedIndex == 2 ? primaryOrange : Colors.black, 
+                    color: _selectedIndex == 2 ? primaryOrange : Theme.of(context).brightness == Brightness.light ? Colors.black : Colors.white.withOpacity(0.1), 
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(color: primaryOrange.withOpacity(0.3), blurRadius: 10, offset: Offset(0, 5))

@@ -54,10 +54,12 @@ class _SetupScreenState extends State<SetupScreen> {
     super.dispose();
   }
 
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
+  // 🎨 THEME COLORS (Now using dynamic getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : Colors.white.withOpacity(0.05);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   // Constants
   static const String callbackUrl = "https://payherocallback-6xi2wmoqdq-uc.a.run.app";
@@ -67,7 +69,8 @@ class _SetupScreenState extends State<SetupScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("PayHero Setup Guide", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        backgroundColor: _surfaceColor,
+        title: Text("PayHero Setup Guide", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,8 +83,8 @@ class _SetupScreenState extends State<SetupScreen> {
               _stepText("Developer Tip: Set your Callback URL in PayHero to:"),
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                child: Text(callbackUrl, style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+                decoration: BoxDecoration(color: _containerColor, borderRadius: BorderRadius.circular(8)),
+                child: Text(callbackUrl, style: GoogleFonts.poppins(fontSize: 10, color: _textColor, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
@@ -102,7 +105,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Widget _stepText(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4), 
-    child: Text(text, style: GoogleFonts.poppins(fontSize: 13))
+    child: Text(text, style: GoogleFonts.poppins(fontSize: 13, color: _textColor.withOpacity(0.8)))
   );
 
   void _verifyPhone() async {
@@ -134,6 +137,9 @@ class _SetupScreenState extends State<SetupScreen> {
     
     String otp = _otpControllers.map((c) => c.text).join();
     bool success = await auth.signInWithOTP(otp);
+    
+    if (!mounted) return;
+
     if (success) {
       String uid = auth.user!.uid;
       
@@ -145,9 +151,14 @@ class _SetupScreenState extends State<SetupScreen> {
       // 🕵️ Check if this UID already has a shop
       String? existingShopId = await shopProvider.findShopByUid(uid);
       
+      if (!mounted) return;
+
       if (existingShopId != null) {
         // Recovery path
         final prefs = await SharedPreferences.getInstance();
+
+        if (!mounted) return;
+
         await prefs.setBool('is_first_run', false);
         
         setState(() {
@@ -208,15 +219,17 @@ class _SetupScreenState extends State<SetupScreen> {
         final result = await callable.call({
           'shop_id': shopId,
           'shop_name': shopName,
-          'type': _channelType, // 👈 Uses the selected type
+          'type': _channelType == 'Till' ? 'till' : 'paybill', // 👈 Map to PayHero API values (lowercase)
           'short_code': shortCode,
           'till_number': _channelType == 'Till' ? shortCode : null, // PayHero usually needs till # in both for Tills
         });
 
         if (result.data['success'] != true) {
-          throw Exception("Activation failed.");
+          throw Exception(result.data['message'] ?? "Activation failed.");
         }
       }
+
+      if (!mounted) return;
 
       setState(() {
         _setupProgress = 0.7;
@@ -252,6 +265,8 @@ class _SetupScreenState extends State<SetupScreen> {
         'is_active': true,
       }, SetOptions(merge: true));
 
+      if (!mounted) return;
+
       setState(() {
         _setupProgress = 1.0;
         _statusMessage = "Finalizing settings...";
@@ -262,25 +277,31 @@ class _SetupScreenState extends State<SetupScreen> {
       
       await Future.delayed(const Duration(milliseconds: 500));
 
+      if (!mounted) return;
+
       if (mounted) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
       }
     } catch (e) {
+      debugPrint("❌ SETUP ERROR: $e");
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Setup failed.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Setup failed: $e")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _containerColor,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [cardGray, Colors.white],
+            colors: [
+              _containerColor,
+              _surfaceColor
+            ],
             stops: const [0.0, 0.4],
           ),
         ),
@@ -315,7 +336,7 @@ class _SetupScreenState extends State<SetupScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(28),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _cardColor,
                         borderRadius: BorderRadius.circular(32),
                         boxShadow: [
                           BoxShadow(
@@ -354,17 +375,17 @@ class _SetupScreenState extends State<SetupScreen> {
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _cardColor,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: primaryOrange.withOpacity(0.12),
+                  color: _primaryOrange.withOpacity(0.12),
                   blurRadius: 32,
                   offset: const Offset(0, 16),
                 )
               ],
             ),
-            child: const Icon(Icons.storefront_rounded, size: 56, color: primaryOrange),
+            child: Icon(Icons.storefront_rounded, size: 56, color: _primaryOrange),
           ),
         ),
         const SizedBox(height: 28),
@@ -373,7 +394,7 @@ class _SetupScreenState extends State<SetupScreen> {
           style: GoogleFonts.outfit(
             fontSize: 34,
             fontWeight: FontWeight.w800,
-            color: textDark,
+            color: _textColor,
             letterSpacing: -0.5,
           ),
         ),
@@ -381,7 +402,7 @@ class _SetupScreenState extends State<SetupScreen> {
         Text(
           _isAuthComplete ? "Business Profile" : "Secure Authentication",
           style: GoogleFonts.poppins(
-            color: primaryOrange,
+            color: _primaryOrange,
             fontSize: 13,
             fontWeight: FontWeight.w600,
             letterSpacing: 2,
@@ -450,7 +471,7 @@ class _SetupScreenState extends State<SetupScreen> {
           children: [
             Text("Payment Configuration", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
             if (_mpesaMode == 'Automated')
-              IconButton(icon: const Icon(Icons.help_outline, color: primaryOrange), onPressed: _showSetupInstructions),
+              IconButton(icon: Icon(Icons.help_outline, color: _primaryOrange), onPressed: _showSetupInstructions),
           ],
         ),
         const SizedBox(height: 10),
@@ -518,9 +539,9 @@ class _SetupScreenState extends State<SetupScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? primaryOrange : Colors.white,
+          color: isSelected ? _primaryOrange : _surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade300),
+          border: Border.all(color: isSelected ? _primaryOrange : Colors.grey.withOpacity(0.3)),
         ),
         child: Center(
           child: Text(
@@ -539,16 +560,16 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget _buildRadioCard(String title, String subtitle, String value, Function(String) onChanged, {VoidCallback? onInfoTap}) {
     return Card(
       elevation: 0,
-      color: cardGray,
+      color: _containerColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: const EdgeInsets.only(bottom: 12),
       child: RadioListTile(
         title: Row(
           children: [
-            Expanded(child: Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textDark))),
+            Expanded(child: Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _textColor))),
             if (onInfoTap != null)
               IconButton(
-                icon: const Icon(Icons.info_outline, size: 20, color: primaryOrange),
+                icon: Icon(Icons.info_outline, size: 20, color: _primaryOrange),
                 onPressed: onInfoTap,
               ),
           ],
@@ -556,7 +577,7 @@ class _SetupScreenState extends State<SetupScreen> {
         subtitle: Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600)),
         value: value,
         groupValue: _mpesaMode,
-        activeColor: primaryOrange,
+        activeColor: _primaryOrange,
         onChanged: (val) => onChanged(val as String),
       ),
     );
@@ -568,11 +589,15 @@ class _SetupScreenState extends State<SetupScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Automated STK Pricing", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text("Automated STK Pricing", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: _textColor)),
             const SizedBox(height: 8),
             Text("Fees are deducted from your M-Bizna wallet per successful sale.", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 24),
@@ -608,7 +633,7 @@ class _SetupScreenState extends State<SetupScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: GoogleFonts.poppins(fontSize: 14, fontWeight: isHeader ? FontWeight.bold : FontWeight.w500)),
-          Text(price, style: GoogleFonts.poppins(fontSize: 14, fontWeight: isHeader ? FontWeight.bold : FontWeight.w800, color: isHeader ? textDark : primaryOrange)),
+          Text(price, style: GoogleFonts.poppins(fontSize: 14, fontWeight: isHeader ? FontWeight.bold : FontWeight.w800, color: isHeader ? _textColor : _primaryOrange)),
         ],
       ),
     );
@@ -625,22 +650,22 @@ class _SetupScreenState extends State<SetupScreen> {
             style: GoogleFonts.poppins(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: textDark.withOpacity(0.6),
+              color: _textColor.withOpacity(0.6),
             ),
           ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: cardGray,
+            color: _containerColor,
             borderRadius: BorderRadius.circular(18),
           ),
           child: TextField(
             controller: ctrl,
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400, fontSize: 14),
-              prefixIcon: Icon(icon, color: primaryOrange, size: 22),
+              prefixIcon: Icon(icon, color: _primaryOrange, size: 22),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             ),
@@ -655,7 +680,10 @@ class _SetupScreenState extends State<SetupScreen> {
       width: double.infinity,
       height: 55,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: textDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : _primaryOrange, 
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))
+        ),
         onPressed: onPressed,
         child: Text(text, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
@@ -665,11 +693,11 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget _buildProgressUI() {
     return Column(
       children: [
-        Text("${(_setupProgress * 100).toInt()}%", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryOrange, fontSize: 18)),
+        Text("${(_setupProgress * 100).toInt()}%", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryOrange, fontSize: 18)),
         const SizedBox(height: 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: LinearProgressIndicator(value: _setupProgress, backgroundColor: Colors.grey.shade300, valueColor: const AlwaysStoppedAnimation<Color>(primaryOrange), minHeight: 6),
+          child: LinearProgressIndicator(value: _setupProgress, backgroundColor: Colors.grey.shade300, valueColor: AlwaysStoppedAnimation<Color>(_primaryOrange), minHeight: 6),
         ),
         const SizedBox(height: 10),
         Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.grey.shade600, fontSize: 12)),
@@ -685,7 +713,7 @@ class _SetupScreenState extends State<SetupScreen> {
           width: 45,
           height: 55,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _surfaceColor,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
@@ -695,7 +723,7 @@ class _SetupScreenState extends State<SetupScreen> {
               )
             ],
             border: Border.all(
-              color: _otpNodes[index].hasFocus ? primaryOrange : Colors.transparent,
+              color: _otpNodes[index].hasFocus ? _primaryOrange : Colors.transparent,
               width: 2
             ),
           ),
@@ -705,7 +733,7 @@ class _SetupScreenState extends State<SetupScreen> {
             textAlign: TextAlign.center,
             keyboardType: TextInputType.number,
             maxLength: 1,
-            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: _textColor),
             decoration: const InputDecoration(
               counterText: "",
               border: InputBorder.none,

@@ -21,11 +21,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _searchQuery = "";
   String _sortBy = "name"; // Options: name, price_high, stock_low
 
-  // 🎨 THEME COLORS
-  static const Color primaryOrange = Color(0xFFFF6B00);
-  static const Color textDark = Color(0xFF1A1A1A);
-  static const Color cardGray = Color(0xFFF5F6F9);
-  static const Color bgWhite = Color(0xFFFFFFFF);
+  // 🎨 THEME COLORS (Dynamic Getters)
+  Color get _primaryOrange => const Color(0xFFFF6B00);
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
+  Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
+  Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
   @override
   void initState() {
@@ -69,6 +70,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context,
       MaterialPageRoute(builder: (context) => SimpleScannerPage()),
     );
+    
+    if (!mounted) return;
 
     if (scannedCode != null) {
       final inventory = Provider.of<InventoryProvider>(context, listen: false);
@@ -96,9 +99,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final displayList = _getFilteredProducts(inventory.products);
 
     return Scaffold(
-      backgroundColor: cardGray,
+      backgroundColor: _containerColor,
       appBar: AppBar(
-        backgroundColor: cardGray,
+        backgroundColor: _containerColor,
         elevation: 0,
         centerTitle: false,
         // 3. Toggle between Title and Search Field
@@ -106,17 +109,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: GoogleFonts.poppins(color: textDark),
+                style: GoogleFonts.poppins(color: _textColor),
                 decoration: InputDecoration(
                   hintText: "Search item or barcode...",
                   hintStyle: GoogleFonts.poppins(color: Colors.grey),
                   border: InputBorder.none,
                 ),
               )
-            : Text("Inventory", style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.bold, fontSize: 24)),
+            : Text("Inventory", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
         actions: [
           IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search, color: textDark),
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: _textColor),
             onPressed: () {
               setState(() {
                 _isSearching = !_isSearching;
@@ -128,7 +131,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           // 4. Filter Menu
           PopupMenuButton<String>(
-            icon: Icon(Icons.sort, color: textDark),
+            icon: Icon(Icons.sort, color: _textColor),
             onSelected: (value) => setState(() => _sortBy = value),
             itemBuilder: (ctx) => [
               PopupMenuItem(value: 'name', child: Text("Name (A-Z)")),
@@ -149,9 +152,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   child: _buildActionButton(
                     icon: Icons.add,
                     label: "Add New",
-                    bgColor: textDark,
+                    bgColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333),
                     textColor: Colors.white,
-                    iconColor: primaryOrange,
+                    iconColor: _primaryOrange,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddProductScreen())),
                   ),
                 ),
@@ -160,9 +163,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   child: _buildActionButton(
                     icon: Icons.qr_code_scanner,
                     label: "Quick Scan",
-                    bgColor: bgWhite,
-                    textColor: textDark,
-                    iconColor: textDark,
+                    bgColor: _cardColor,
+                    textColor: _textColor,
+                    iconColor: _textColor,
                     onTap: _handleQuickEntry,
                   ),
                 ),
@@ -194,10 +197,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
                     return Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _cardColor,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
-                          BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
+                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
                         ],
                       ),
                       child: ListTile(
@@ -205,7 +208,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         leading: Container(
                           width: 60, height: 60,
                           decoration: BoxDecoration(
-                            color: cardGray,
+                            color: _containerColor,
                             borderRadius: BorderRadius.circular(15),
                             image: product.imagePath != null
                               ? DecorationImage(image: FileImage(File(product.imagePath!)), fit: BoxFit.cover)
@@ -217,7 +220,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         ),
                         title: Text(
                           product.name, 
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16, color: textDark)
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16, color: _textColor)
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +231,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: isOutOfStock ? Color(0xFFFFEBEE) : (isLowStock ? Color(0xFFFFF3E0) : Color(0xFFE8F5E9)),
+                                color: isOutOfStock 
+                                  ? Colors.red.withOpacity(0.1) 
+                                  : (isLowStock ? _primaryOrange.withOpacity(0.1) : Colors.green.withOpacity(0.1)),
                                 borderRadius: BorderRadius.circular(8)
                               ),
                               child: Text(
@@ -236,7 +241,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 style: GoogleFonts.poppins(
                                   fontSize: 11, 
                                   fontWeight: FontWeight.w600,
-                                  color: isOutOfStock ? Colors.red : (isLowStock ? primaryOrange : Colors.green)
+                                  color: isOutOfStock ? Colors.red : (isLowStock ? _primaryOrange : Colors.green)
                                 ),
                               ),
                             )
@@ -251,9 +256,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             );
                           },
                           child: Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: cardGray, shape: BoxShape.circle),
-                            child: Icon(Icons.edit_outlined, color: textDark, size: 18),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: _containerColor, shape: BoxShape.circle),
+                            child: Icon(Icons.edit_outlined, color: _textColor, size: 18),
                           ),
                         ),
                       ),
@@ -282,8 +287,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
           color: bgColor,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            if (bgColor == bgWhite)
-              BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
+            if (bgColor == Colors.white || bgColor == _cardColor)
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
           ]
         ),
         child: Row(
