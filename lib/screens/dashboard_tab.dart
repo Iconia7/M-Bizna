@@ -1,5 +1,6 @@
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:duka_manager/screens/customers_screen.dart';
+import 'package:duka_manager/screens/expense_screen.dart';
 import 'package:duka_manager/screens/wallet_screen.dart';
 import 'package:duka_manager/services/biometric_service.dart';
 import 'package:flutter/material.dart';
@@ -25,10 +26,11 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Future<void> _loadData() async {
-    Provider.of<ShopProvider>(context, listen: false).refreshProStatus();
+    final shop = Provider.of<ShopProvider>(context, listen: false);
+    await shop.refreshProStatus();
     await Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
-    await Provider.of<InventoryProvider>(context, listen: false).loadProducts();
-    final shopId = Provider.of<ShopProvider>(context, listen: false).shopId;
+    await Provider.of<InventoryProvider>(context, listen: false).loadProducts(isPro: shop.isProActive);
+    final shopId = shop.shopId;
     Provider.of<WalletProvider>(context, listen: false).startBalanceListener(shopId);
   }
 
@@ -140,61 +142,64 @@ class _DashboardTabState extends State<DashboardTab> {
               SizedBox(height: 25),
 
               // 2. Hero Card (The "Bizna Card" in Orange)
-              _buildCreativeHeroCard(totalStockValue, primaryOrange),
+              if (shop.isOwner) 
+                _buildCreativeHeroCard(totalStockValue, primaryOrange, shop.isProActive),
               
-              SizedBox(height: 25),
+              if (shop.isOwner) 
+                const SizedBox(height: 25),
+
               GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WalletScreen())),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Icon with soft background
-                  Container(
-                    padding: EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFF6B00).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.account_balance_wallet, color: Color(0xFFFF6B00), size: 24),
-                  ),
-                  SizedBox(width: 15),
-                  // Text Info
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("App Balance", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-                      Text(
-                        "KES ${wallet.balance.toStringAsFixed(2)}", 
-                        style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))
-                      ),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WalletScreen())),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
                     ],
                   ),
-                  Spacer(),
-                  // Top Up Action Text
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF1A1A1A),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      "Top Up", 
-                      style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)
-                    ),
-                  )
-                ],
+                  child: Row(
+                    children: [
+                      // Icon with soft background
+                      Container(
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFF6B00).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.account_balance_wallet, color: Color(0xFFFF6B00), size: 24),
+                      ),
+                      SizedBox(width: 15),
+                      // Text Info
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("App Balance", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                          Text(
+                            "KES ${wallet.balance.toStringAsFixed(2)}", 
+                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))
+                          ),
+                        ],
+                      ),
+                      Spacer(),
+                      // Top Up Action Text
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "Top Up", 
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)
+                        ),
+                      )
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
 
           SizedBox(height: 25),
 
@@ -253,46 +258,75 @@ class _DashboardTabState extends State<DashboardTab> {
                         ),
                       ),
                       SizedBox(height: 15),
-                      // 👇 UPDATED: Deni Manager Button
-                      Expanded(
-                        child: _buildBentoAction(
-                          title: "Deni Manager",
-                          subtitle: "Track Debt",
-                          icon: Icons.people_alt_outlined,
-                          bgColor: bgWhite,
-                          textColor: textDark,
-                          iconColor: Colors.blue, // Distinct Blue Color
-                          isTall: false,
-                          onTap: () async {
-  final shop = Provider.of<ShopProvider>(context, listen: false);
-  
-  bool canAccess = false;
-
-  if (shop.isSecurityEnabled) {
-    // 🛡️ LOCK IS ON: Run Biometric/PIN check
-    canAccess = await BiometricService.authenticate();
-  } else {
-    // 🔓 LOCK IS OFF: Direct entry
-    canAccess = true;
-  }
-
-  if (canAccess) {
-    Navigator.push(context, MaterialPageRoute(builder: (c) => CustomersScreen()));
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Authentication Required to view debts"))
-    );
-  }
-},
+                      if (shop.isOwner)
+                        Expanded(
+                          child: _buildBentoAction(
+                            title: "Deni Manager",
+                            subtitle: "Track Debt",
+                            icon: Icons.people_alt_outlined,
+                            bgColor: bgWhite,
+                            textColor: textDark,
+                            iconColor: Colors.blue, 
+                            isTall: false,
+                            onTap: () async {
+                              bool canAccess = shop.isSecurityEnabled ? await BiometricService.authenticate() : true;
+                              if (canAccess) Navigator.push(context, MaterialPageRoute(builder: (c) => CustomersScreen()));
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-              SizedBox(height: 40),
+          const SizedBox(height: 15),
+          if (shop.isOwner)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _buildBentoAction(
+                      title: "Expenses ${shop.isProActive ? '' : '🔒'}",
+                      subtitle: shop.isProActive ? "Business Cost" : "Pro Feature",
+                      icon: Icons.receipt_long_outlined,
+                      bgColor: Colors.white,
+                      textColor: shop.isProActive ? const Color(0xFF1A1A1A) : Colors.grey,
+                      iconColor: shop.isProActive ? Colors.redAccent : Colors.grey,
+                      isTall: false,
+                      onTap: () {
+                        if (shop.isProActive) {
+                          Navigator.push(context, MaterialPageRoute(builder: (c) => const ExpenseScreen()));
+                        } else {
+                          _showSubscriptionRequiredDialog();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: _buildBentoAction(
+                      title: "Reports ${shop.isProActive ? '' : '🔒'}",
+                      subtitle: shop.isProActive ? "Sales Analytics" : "Pro Feature",
+                      icon: Icons.bar_chart_outlined,
+                      bgColor: Colors.white,
+                      textColor: shop.isProActive ? const Color(0xFF1A1A1A) : Colors.grey,
+                      iconColor: shop.isProActive ? Colors.green : Colors.grey,
+                      isTall: false,
+                      onTap: () {
+                         if (shop.isProActive) {
+                           // Navigate to Reports if implemented separately or handle accordingly
+                         } else {
+                           _showSubscriptionRequiredDialog();
+                         }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 40),
             ],
           ),
         ),
@@ -301,7 +335,7 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   // 🎨 WIDGET: Creative Hero Card (Orange Gradient)
-  Widget _buildCreativeHeroCard(double value, Color primaryColor) {
+  Widget _buildCreativeHeroCard(double value, Color primaryColor, bool isProActive) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(25),
@@ -336,7 +370,9 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
               SizedBox(height: 15),
               Text(
-                "KES ${value.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
+                isProActive 
+                ? "KES ${value.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}"
+                : "KES ***** (Pro Only)",
                 style: GoogleFonts.poppins(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 10),
@@ -422,6 +458,28 @@ class _DashboardTabState extends State<DashboardTab> {
             )
           ],
         ),
+      ),
+    );
+  }
+
+  void _showSubscriptionRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Upgrade to Pro", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Text("Cloud Sync, Advanced Reports, and Expense Tracking require a KES 200/mo subscription."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Maybe Later")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B00)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen()));
+            },
+            child: const Text("View Plans", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

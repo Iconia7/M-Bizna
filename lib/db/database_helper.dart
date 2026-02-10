@@ -9,8 +9,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    // 🚀 Incremented to v4 to include 'unit' and 'REAL' quantities
-    _database = await _initDB('duka_manager_v4.db'); 
+    _database = await _initDB('m_bizna_main.db'); // 🛡️ Stable filename
     return _database!;
   }
 
@@ -20,9 +19,35 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 1, 
+      version: 5, // 🚀 Incremented version for new features
       onCreate: _createDB,
+      onUpgrade: _onUpgrade, // 👈 Added migration handler
     );
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Migrate from v1 to v2: Add wallet and history if missing
+    }
+    if (oldVersion < 3) {
+      // Migrate to v3: Add settings table
+      await db.execute('CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, mpesa_mode TEXT DEFAULT "Manual", mpesa_number TEXT, payhero_channel_id TEXT, payhero_auth TEXT)');
+      await db.insert('settings', {'id': 1, 'mpesa_mode': 'Manual'});
+    }
+    if (oldVersion < 4) {
+      // Migrate to v4: Add expenses table and unit column
+      await db.execute('CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL, amount REAL NOT NULL, category TEXT NOT NULL, date_time TEXT NOT NULL)');
+      
+      // Check if unit column exists before adding
+      var tableInfo = await db.rawQuery('PRAGMA table_info(products)');
+      bool columnExists = tableInfo.any((column) => column['name'] == 'unit');
+      if (!columnExists) {
+        await db.execute('ALTER TABLE products ADD COLUMN unit TEXT DEFAULT "Pcs"');
+      }
+    }
+    if (oldVersion < 5) {
+       // Future migrations
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -100,6 +125,17 @@ class DatabaseHelper {
   )
 ''');
 await db.insert('settings', {'id': 1, 'mpesa_mode': 'Manual'});
+
+    // 6. Expenses
+    await db.execute('''
+      CREATE TABLE expenses (
+        id $idType,
+        description $textType,
+        amount $realType,
+        category $textType,
+        date_time $textType
+      )
+    ''');
   }
 
   Future<void> resetDatabase() async {

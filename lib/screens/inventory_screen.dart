@@ -7,6 +7,7 @@ import '../models/product.dart';
 import 'add_product_screen.dart';
 import '../widgets/simple_scanner_page.dart';
 import '../widgets/feedback_dialog.dart';
+import '../providers/shop_provider.dart';
 
 class InventoryScreen extends StatefulWidget {
   @override
@@ -29,7 +30,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   void initState() {
     super.initState();
-    Provider.of<InventoryProvider>(context, listen: false).loadProducts();
+    final shop = Provider.of<ShopProvider>(context, listen: false);
+    Provider.of<InventoryProvider>(context, listen: false).loadProducts(isPro: shop.isProActive);
     // Listen to search input changes
     _searchController.addListener(() {
       setState(() {

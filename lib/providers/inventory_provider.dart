@@ -10,23 +10,22 @@ class InventoryProvider with ChangeNotifier {
   List<Product> get products => [..._products];
 
   // 1. LOAD: Fetch all items from SQLite
-  Future<void> loadProducts() async {
+  Future<void> loadProducts({bool isPro = false}) async {
     final db = await DatabaseHelper.instance.database;
-    // Query the table
-    final result = await db.query('products', orderBy: 'id DESC'); // Newest first
+    final result = await db.query('products', orderBy: 'id DESC');
     
-    // Convert List<Map> to List<Product>
     _products = result.map((json) => Product.fromMap(json)).toList();
     notifyListeners();
-    _checkLowStock();
+    
+    if (isPro) {
+      _checkLowStock();
+    }
   }
 
   Future<void> _checkLowStock() async {
-    // Check for items with less than 5 qty
     for (var product in _products) {
       if (product.stockQty <= 5 && product.stockQty > 0) {
-        // Send alert
-        await NotificationService.showLowStockAlert(product.name, product.stockQty as int);
+        await NotificationService.showLowStockAlert(product.name, product.stockQty.toInt());
       }
     }
   }
@@ -44,7 +43,7 @@ class InventoryProvider with ChangeNotifier {
 }
 
   // 2. ADD: Insert into SQLite
-  Future<void> addProduct(Product product) async {
+  Future<void> addProduct(Product product, {bool isPro = false}) async {
     final db = await DatabaseHelper.instance.database;
     
     // Check if barcode exists first to prevent duplicates (Optional safety)
@@ -66,7 +65,7 @@ class InventoryProvider with ChangeNotifier {
       await db.insert('products', product.toMap());
     }
 
-    await loadProducts(); // Refresh list to show changes
+    await loadProducts(isPro: true); // This will be handled by the caller
   }
 
   // 3. SEARCH: Find single item by barcode (For Scanner)
@@ -79,7 +78,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   // 4. UPDATE: Modify an existing product
-Future<void> updateProduct(Product product) async {
+Future<void> updateProduct(Product product, {bool isPro = false}) async {
     final db = await DatabaseHelper.instance.database;
     await db.update(
       'products',

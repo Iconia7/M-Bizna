@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class PayHeroService {
-  final String _callbackUrl = dotenv.env['FIREBASE_CALLBACK_URL'] ?? "";
+  final String _callbackUrl = (dotenv.env['FIREBASE_CALLBACK_URL'] ?? "") + "?api_key=${dotenv.env['CALLBACK_API_KEY']}";
   final String _url = "https://backend.payhero.co.ke/api/v2/payments";
 
   /// Initiates M-Pesa STK Push

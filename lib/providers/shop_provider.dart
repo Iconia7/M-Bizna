@@ -9,8 +9,15 @@ class ShopProvider with ChangeNotifier {
   bool _enableSound = true;
   DateTime? _proExpiry;
   bool _autoRenew = false;
+  String? _ownerUid;
   bool get autoRenewEnabled => _autoRenew;
   bool _isPro = false;
+  String _userRole = 'Owner'; // 👈 NEW: 'Owner' or 'Attendant'
+
+  // Getters
+  String get userRole => _userRole;
+  bool get isOwner => _userRole == 'Owner';
+  bool get isAttendant => _userRole == 'Attendant';
   
   // Check if Pro features are currently active
   bool get isProActive {
@@ -84,14 +91,50 @@ Future<void> toggleAutoRenew(bool value) async {
   }
 
   // Update your loadSubscriptionStatus to also fetch 'auto_renew'
-  Future<void> loadSubscriptionStatus() async {
+  Future<void> loadSubscriptionStatus(String? uid) async {
+    if (shopId.isEmpty) return;
+    
     final doc = await FirebaseFirestore.instance.collection('shops').doc(shopId).get();
     if (doc.exists) {
       final data = doc.data()!;
       _proExpiry = (data['pro_expiry'] as Timestamp?)?.toDate();
       _autoRenew = data['auto_renew'] ?? false;
+      _ownerUid = data['owner_uid'];
+      
+      // Safety link: If doc exists but no UID, link it now
+      if (_ownerUid == null && uid != null) {
+        await FirebaseFirestore.instance.collection('shops').doc(shopId).update({
+          'owner_uid': uid
+        });
+        _ownerUid = uid;
+      }
+      
       notifyListeners();
     }
+  }
+
+  /// RESTORE LOGIC: Find shop by Owner UID
+  Future<String?> findShopByUid(String uid) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('shops')
+        .where('owner_uid', isEqualTo: uid)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      final doc = snapshot.docs.first;
+      _shopId = doc.id;
+      _shopName = doc.data()['shop_name'] ?? "My Shop";
+      
+      // Save locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('shop_id', _shopId);
+      await prefs.setString('shop_name', _shopName);
+      
+      notifyListeners();
+      return _shopId;
+    }
+    return null;
   }
 
 
@@ -103,9 +146,17 @@ Future<void> toggleAutoRenew(bool value) async {
     return "$type|$_shopId|$timestamp";
   }
 
+  Future<void> toggleUserRole() async {
+    _userRole = _userRole == 'Owner' ? 'Attendant' : 'Owner';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_role', _userRole);
+    notifyListeners();
+  }
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _shopName = prefs.getString('shop_name') ?? "My Shop";
+    _userRole = prefs.getString('user_role') ?? 'Owner';
     _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
     _enableSound = prefs.getBool('enable_sound') ?? true;
 

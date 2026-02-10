@@ -1,4 +1,5 @@
 import 'package:duka_manager/firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:duka_manager/providers/customer_provider.dart';
 import 'package:duka_manager/providers/wallet_provider.dart';
 import 'package:duka_manager/screens/setup_screen.dart';
@@ -13,18 +14,32 @@ import 'providers/report_provider.dart';
 import 'providers/shop_provider.dart';
 import 'screens/home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:duka_manager/providers/auth_provider.dart';
+import 'package:duka_manager/providers/expense_provider.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'dart:ui';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // 1. Load .env
-  await dotenv.load(fileName: ".env");
+  await dotenv.load(fileName: "assets/.env");
 
   // 2. Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 🚀 Pass all uncaught "fatal" errors from the framework to Crashlytics
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   // 3. Initialize Notifications
   await NotificationService.initialize();
@@ -40,7 +55,9 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => SalesProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => ShopProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
+        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProxyProvider<ShopProvider, WalletProvider>(
           create: (_) => WalletProvider(),
           update: (_, shop, wallet) {
@@ -127,6 +144,36 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: primaryOrange,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: primaryOrange,
+          brightness: Brightness.dark,
+          primary: primaryOrange,
+          surface: const Color(0xFF1E1E1E),
+        ),
+        textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFF121212),
+          elevation: 0,
+          titleTextStyle: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+          iconTheme: const IconThemeData(color: Colors.white),
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system, // Auto-switch based on system settings
+      navigatorObservers: [
+        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+      ],
       // Use the isFirstRun variable to decide initial screen
       home: isFirstRun ? SetupScreen() :  HomeScreen(),
     );

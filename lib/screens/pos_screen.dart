@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:duka_manager/db/database_helper.dart';
+import 'package:duka_manager/providers/auth_provider.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:duka_manager/providers/wallet_provider.dart';
 import 'package:duka_manager/screens/wallet_screen.dart';
@@ -557,9 +558,10 @@ void _showSubscriptionRequiredDialog() {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () async {
               Navigator.pop(ctx);
+              final auth = Provider.of<AuthProvider>(context, listen: false);
               bool success = await wallet.paySubscriptionWithWallet(shop.shopId);
               if (success) {
-                await shop.loadSubscriptionStatus(); // Refresh status
+                await shop.loadSubscriptionStatus(auth.user?.uid); // Refresh status
                 FeedbackDialog.show(context, title: "Success", message: "Pro activated!", isSuccess: true);
               }
             },
@@ -595,7 +597,7 @@ void _finalizeSale(String method) async {
     await sales.submitOrder(); 
     
     // 🔄 STEP 2: Refresh Inventory & Reports UI
-    await inventory.loadProducts();
+    await inventory.loadProducts(isPro: shop.isProActive);
     await Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
 
     // 💰 STEP 3: Handle Cloud Sync (Subscription Based)

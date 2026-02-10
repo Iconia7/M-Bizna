@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:google_fonts/google_fonts.dart';
@@ -172,11 +173,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       );
 
       final provider = Provider.of<InventoryProvider>(context, listen: false);
-
+      final shop = Provider.of<ShopProvider>(context, listen: false);
       if (widget.productToEdit != null) {
-        await provider.updateProduct(product);
+        await provider.updateProduct(product, isPro: shop.isProActive);
       } else {
-        await provider.addProduct(product);
+        await provider.addProduct(product, isPro: shop.isProActive);
       }
 
       if (mounted) {

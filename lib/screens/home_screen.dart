@@ -1,3 +1,4 @@
+import 'package:duka_manager/providers/auth_provider.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,6 +17,22 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+  }
+
+  void _refreshStatus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final shop = Provider.of<ShopProvider>(context, listen: false);
+      if (auth.isAuthenticated) {
+        shop.loadSubscriptionStatus(auth.user?.uid);
+      }
+    });
+  }
 
   final List<Widget> _pages = [
     DashboardTab(),

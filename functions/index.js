@@ -2,14 +2,23 @@ const functions = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler"); // 👈 Import v2 Scheduler
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const axios = require("axios");
 admin.initializeApp();
 
 exports.payheroCallback = functions.https.onRequest(async (req, res) => {
     const data = req.body;
 
+    // 🛡️ SECURITY: Basic API Key Verification
+    // In a production app, use PayHero's signature verification if available.
+    const apiKey = req.query.api_key;
+    if (apiKey !== process.env.CALLBACK_API_KEY) {
+        console.error("⛔ UNAUTHORIZED: Invalid Callback API Key");
+        return res.status(401).send("Unauthorized");
+    }
+
     const payheroResponse = data.response || {};
-    const fullReference = payheroResponse.ExternalReference; 
-    const status = payheroResponse.Status; 
+    const fullReference = payheroResponse.ExternalReference;
+    const status = payheroResponse.Status;
 
     if (!fullReference) {
         console.error("❌ ERROR: Missing ExternalReference", data);
@@ -34,7 +43,7 @@ exports.payheroCallback = functions.https.onRequest(async (req, res) => {
         if (status === "Success") {
             const parts = fullReference.split('|');
             const type = parts[0];   // "TOPUP", "SALE", or "SUB"
-            const shopId = parts[1]; 
+            const shopId = parts[1];
             const amountPaid = parseFloat(payheroResponse.Amount) || 0;
 
             if (shopId) {
@@ -71,15 +80,20 @@ exports.payheroCallback = functions.https.onRequest(async (req, res) => {
                         description: "Pro Monthly Subscription",
                         date_time: admin.firestore.FieldValue.serverTimestamp(),
                     });
-                } 
-                
-                // --- EXISTING WALLET LOGIC ---
+                }
+
+                // --- WALLET DEDUCTION FOR TRANSACTION FEES ---
                 else {
+                    const amountPaid = parseFloat(payheroResponse.Amount) || 0;
+                    const payheroCost = calculatePayHeroFee(amountPaid);
+                    const markup = 2.0; // Small markup to cover platform overhead
+                    const totalDeduction = payheroCost + markup;
+
                     await shopRef.collection('wallet_history').add({
-                        amount: type === "TOPUP" ? amountPaid : -0.0, // We no longer charge 2.0 per sale
+                        amount: type === "TOPUP" ? amountPaid : -totalDeduction,
                         type: type,
                         status: "PAID",
-                        description: type === "TOPUP" ? "Wallet Top Up" : "M-Pesa Sale (Pro)",
+                        description: type === "TOPUP" ? "Wallet Top Up" : `STK Processing Fee (KES ${payheroCost} + ${markup} Service)`,
                         date_time: admin.firestore.FieldValue.serverTimestamp(),
                     });
 
@@ -87,6 +101,12 @@ exports.payheroCallback = functions.https.onRequest(async (req, res) => {
                         await shopRef.update({
                             wallet_balance: admin.firestore.FieldValue.increment(amountPaid)
                         });
+                    } else if (totalDeduction > 0) {
+                        // Deduct fee from wallet
+                        await shopRef.update({
+                            wallet_balance: admin.firestore.FieldValue.increment(-totalDeduction)
+                        });
+                        console.log(`💸 Dynamic Deduction: ${totalDeduction} from Shop ${shopId} (Amount: ${amountPaid})`);
                     }
                 }
             }
@@ -98,11 +118,36 @@ exports.payheroCallback = functions.https.onRequest(async (req, res) => {
         return res.status(500).send("Internal Error");
     }
 });
+
+/**
+ * Calculates the exact PayHero transaction fee based on tiered pricing
+ */
+function calculatePayHeroFee(amount) {
+    if (amount <= 49) return 0;
+    if (amount <= 499) return 6;
+    if (amount <= 999) return 10;
+    if (amount <= 1499) return 15;
+    if (amount <= 2499) return 20;
+    if (amount <= 3499) return 25;
+    if (amount <= 4999) return 30;
+    if (amount <= 7499) return 40;
+    if (amount <= 9999) return 45;
+    if (amount <= 14999) return 50;
+    if (amount <= 19999) return 55;
+    if (amount <= 34999) return 80;
+    if (amount <= 49999) return 105;
+    if (amount <= 149999) return 130;
+    if (amount <= 249999) return 160;
+    if (amount <= 349999) return 195;
+    if (amount <= 549999) return 230;
+    if (amount <= 749999) return 275;
+    return 320; // 750k+
+}
 // This runs every day at midnight
 exports.scheduledAutoRenewal = onSchedule('0 0 * * *', async (event) => {
     const now = admin.firestore.Timestamp.now();
     const shopsRef = admin.firestore().collection('shops');
-    
+
     // 1. Find shops where subscription expired AND auto_renew is enabled
     const snapshot = await shopsRef
         .where('auto_renew', '==', true)
@@ -150,4 +195,67 @@ exports.scheduledAutoRenewal = onSchedule('0 0 * * *', async (event) => {
     });
 
     return batch.commit();
+});
+
+// --- 🚀 NEW: AUTOMATED MERCHANT ACTIVATION ---
+exports.activateMerchantChannel = functions.https.onCall(async (data, context) => {
+    // 🛡️ Ensure user is authenticated
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+
+    const { shop_id, type, short_code, till_number, shop_name } = data;
+
+    if (!shop_id || !short_code || !type) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing shop_id, type, or short_code.');
+    }
+
+    try {
+        const payheroKey = process.env.PAYHERO_API_KEY;
+        if (!payheroKey) {
+            console.error("🔥 Missing PAYHERO_API_KEY in environment");
+            throw new functions.https.HttpsError('failed-precondition', 'Server not configured for activation.');
+        }
+
+        // 1. Register Channel on PayHero Programmatically using Axios
+        const response = await axios.post('https://backend.payhero.co.ke/api/v2/payment_channels', {
+            name: shop_name || `Shop_${shop_id}`,
+            type: type, // 'Till' or 'Paybill'
+            shortcode: short_code,
+            till_number: till_number || null
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${payheroKey}`
+            }
+        });
+
+        const result = response.data;
+
+        if (!result.success) {
+            console.error("❌ PayHero Registration Failed:", result);
+            throw new functions.https.HttpsError('internal', result.message || 'Failed to register with PayHero.');
+        }
+
+        const channelId = result.channel_id;
+
+        // 2. Link this channel_id to the shop in Firestore
+        await admin.firestore().collection('shops').doc(shop_id).set({
+            payhero_channel_id: channelId.toString(),
+            is_active: true,
+            activation_processed: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log(`✅ Automated Activation Success for Shop ${shop_id}. Channel: ${channelId}`);
+
+        return {
+            success: true,
+            channel_id: channelId
+        };
+
+    } catch (err) {
+        console.error("🔥 Activation Critical Error:", err.response ? err.response.data : err.message);
+        throw new functions.https.HttpsError('internal', (err.response && err.response.data && err.response.data.message) ? err.response.data.message : err.message);
+    }
 });

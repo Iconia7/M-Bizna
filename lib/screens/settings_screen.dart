@@ -14,11 +14,13 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/shop_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/report_provider.dart';
 import '../widgets/feedback_dialog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../services/biometric_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -88,8 +90,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       message: "Could not initiate payment. Check your API settings.", 
       isSuccess: false
     );
+    }
   }
-}
+
 
 void _showNumberRequiredDialog() {
   final phoneController = TextEditingController();
@@ -202,9 +205,10 @@ void _showNumberRequiredDialog() {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () async {
               Navigator.pop(ctx);
+              final auth = Provider.of<AuthProvider>(context, listen: false);
               bool success = await wallet.paySubscriptionWithWallet(shop.shopId);
               if (success) {
-                await shop.loadSubscriptionStatus(); // Refresh status
+                await shop.loadSubscriptionStatus(auth.user?.uid); // Refresh status
                 FeedbackDialog.show(context, title: "Success", message: "Pro activated!", isSuccess: true);
               }
             },
@@ -358,7 +362,35 @@ Card(
 ),
   ),
 ),
- Divider(height: 1, color: Colors.grey.shade100),
+                  Divider(height: 1, color: Colors.grey.shade100),
+                  
+                  // 👤 NEW: ROLE SELECTION (RBAC)
+                  _buildSwitchTile(
+                    "Attendant Mode ${shop.isProActive ? '' : '(PRO)'}", 
+                    shop.isProActive ? "Hide profits and sensitive reports" : "Subscribe to Pro to enable this", 
+                    shop.isAttendant, 
+                    (val) async {
+                      if (!shop.isProActive) {
+                        _showSubscriptionRequiredDialog();
+                        return;
+                      }
+                      if (shop.isOwner) {
+                        // Switch to Attendant (No PIN needed)
+                        await shop.toggleUserRole();
+                        FeedbackDialog.show(context, title: "Mode Switched", message: "You are now in Attendant Mode.", isSuccess: true);
+                      } else {
+                        // Switch to Owner (PIN/Biometric REQUIRED)
+                        bool canSwitch = await BiometricService.authenticate();
+                        if (canSwitch) {
+                          await shop.toggleUserRole();
+                          FeedbackDialog.show(context, title: "Success", message: "Welcome back, Owner.", isSuccess: true);
+                        } else {
+                          FeedbackDialog.show(context, title: "Access Denied", message: "Authenticaton failed.", isSuccess: false);
+                        }
+                      }
+                    }
+                  ),
+                  Divider(height: 1, color: Colors.grey.shade100),
                   
                   // Sound Effect Switch
                   _buildSwitchTile(

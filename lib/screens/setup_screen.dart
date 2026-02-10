@@ -1,8 +1,12 @@
+import 'package:duka_manager/providers/auth_provider.dart';
+import 'package:duka_manager/widgets/feedback_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../providers/shop_provider.dart';
 import '../db/database_helper.dart'; 
 import 'home_screen.dart';
@@ -14,24 +18,50 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen> {
   // Controllers
+  final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   final _numberController = TextEditingController();
-  final _channelController = TextEditingController();
-  final _authController = TextEditingController();
+  final _shortCodeController = TextEditingController(); // 👈 Renamed
+  final _tillNumberController = TextEditingController(); // 👈 Renamed
+  
+  // OTP Focused Controllers & Nodes
+  final List<TextEditingController> _otpControllers = List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _otpNodes = List.generate(6, (_) => FocusNode());
 
   // State Variables
   bool _isLoading = false;
+  bool _isOTPSent = false;
   bool _isPaymentSetup = false; 
+  bool _isAuthComplete = false;
   String _mpesaMode = 'Manual';
   double _setupProgress = 0.0;
   String _statusMessage = "Starting setup...";
+  String _channelType = 'Paybill'; // 👈 NEW: 'Paybill' or 'Till'
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _nameController.dispose();
+    _numberController.dispose();
+    _shortCodeController.dispose();
+    _tillNumberController.dispose();
+    for (var c in _otpControllers) {
+      c.dispose();
+    }
+    for (var n in _otpNodes) {
+      n.dispose();
+    }
+    super.dispose();
+  }
 
   // 🎨 THEME COLORS
   static const Color primaryOrange = Color(0xFFFF6B00);
   static const Color textDark = Color(0xFF1A1A1A);
   static const Color cardGray = Color(0xFFF5F6F9);
 
-  // 🚀 NEW: Instruction Dialog for PayHero
+  // Constants
+  static const String callbackUrl = "https://payherocallback-6xi2wmoqdq-uc.a.run.app";
+
   void _showSetupInstructions() {
     showDialog(
       context: context,
@@ -42,58 +72,118 @@ class _SetupScreenState extends State<SetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _stepText("1. Create an account at payhero.co.ke"),
-              _stepText("2. Go to 'Settings' > 'Payment Channels' and add your Till/Paybill"),
-              _stepText("3. Copy the 'Channel ID' into this app"),
-              _stepText("4. Go to 'Settings' > 'API Keys' > CREATE API KEY and copy the 'Auth Token'"),
-              _stepText("5. Set your Callback URL to:"),
+              _stepText("1. Enter your M-Pesa Business details here"),
+              _stepText("2. M-Bizna automatically registers your store"),
+              _stepText("3. Start receiving STK prompts immediately"),
+              _stepText("4. Note: Transaction fees apply for automated STK"),
+              const SizedBox(height: 10),
+              _stepText("Developer Tip: Set your Callback URL in PayHero to:"),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                child: const Text(
-                  "https://payherocallback-6xi2wmoqdq-uc.a.run.app",
-                  style: TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.blueGrey),
-                ),
+                child: Text(callbackUrl, style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
               ),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Got it"))],
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(const ClipboardData(text: callbackUrl));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Link Copied!")));
+            }, 
+            child: const Text("Copy Link")
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Got it")),
+        ],
       ),
     );
   }
 
   Widget _stepText(String text) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6), 
-    child: Text(text, style: GoogleFonts.poppins(fontSize: 13, color: Colors.black87))
+    padding: const EdgeInsets.symmetric(vertical: 4), 
+    child: Text(text, style: GoogleFonts.poppins(fontSize: 13))
   );
 
-void _finishSetup() async {
-    String shopName = _nameController.text.trim();
-    String mpesaNum = _numberController.text.trim();
-    String channelId = _channelController.text.trim();
-    String authKey = _authController.text.trim();
-
-    // 🛑 VALIDATION GATE
-    if (shopName.isEmpty) return;
-
-    if (_mpesaMode == 'Manual' && mpesaNum.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter your M-Pesa number for Manual mode.")),
-      );
+  void _verifyPhone() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    String phone = _phoneController.text.trim();
+    if (!phone.startsWith("+")) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Include country code (e.g. +254)")));
       return;
     }
 
-    if (_mpesaMode == 'Automated') {
-      if (channelId.isEmpty || authKey.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Automated mode requires Channel ID and API Key.")),
-        );
-        return;
-      }
-    }
+    setState(() => _isLoading = true);
+    await auth.verifyPhoneNumber(
+      phone,
+      onCodeSent: (_) => setState(() {
+        _isLoading = false;
+        _isOTPSent = true;
+      }),
+      onError: (err) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      },
+    );
+  }
 
-    // --- Start Setup Process ---
+  void _verifyOTP() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final shopProvider = Provider.of<ShopProvider>(context, listen: false);
+    setState(() => _isLoading = true);
+    
+    String otp = _otpControllers.map((c) => c.text).join();
+    bool success = await auth.signInWithOTP(otp);
+    if (success) {
+      String uid = auth.user!.uid;
+      
+      setState(() {
+        _statusMessage = "Identifying your account...";
+        _setupProgress = 0.5;
+      });
+
+      // 🕵️ Check if this UID already has a shop
+      String? existingShopId = await shopProvider.findShopByUid(uid);
+      
+      if (existingShopId != null) {
+        // Recovery path
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_first_run', false);
+        
+        setState(() {
+          _statusMessage = "Welcome back! Synchronizing shop...";
+          _setupProgress = 1.0;
+        });
+
+        await Future.delayed(const Duration(milliseconds: 800));
+        
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+        }
+      } else {
+        // New user path
+        setState(() {
+          _isLoading = false;
+          _isAuthComplete = true;
+        });
+      }
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid OTP")));
+    }
+  }
+
+  void _finishSetup() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final shopProvider = Provider.of<ShopProvider>(context, listen: false);
+    
+    String shopName = _nameController.text.trim();
+    String mpesaNum = _numberController.text.trim();
+    String shortCode = _shortCodeController.text.trim();
+    String tillNumber = _tillNumberController.text.trim();
+
+    if (shopName.isEmpty) return;
+
     setState(() {
       _isLoading = true;
       _setupProgress = 0.1;
@@ -101,147 +191,155 @@ void _finishSetup() async {
     });
 
     try {
-      final shopProvider = Provider.of<ShopProvider>(context, listen: false);
-      
-      await Future.delayed(const Duration(milliseconds: 500));
       await shopProvider.updateShopName(shopName);
       String shopId = shopProvider.shopId;
-      
+      String uid = auth.user!.uid;
+
       setState(() {
-        _setupProgress = 0.3;
-        _statusMessage = "Configuring payment methods...";
+        _setupProgress = 0.4;
+        _statusMessage = "Registering with M-Pesa network...";
       });
 
-      // Step 2: Save Hybrid Payment Settings to SQLite
+      // 🚀 AUTOMATED ACTIVATION VIA CLOUD FUNCTIONS
+      if (_mpesaMode == 'Automated') {
+        final functions = FirebaseFunctions.instance;
+        final callable = functions.httpsCallable('activateMerchantChannel');
+        
+        final result = await callable.call({
+          'shop_id': shopId,
+          'shop_name': shopName,
+          'type': _channelType, // 👈 Uses the selected type
+          'short_code': shortCode,
+          'till_number': _channelType == 'Till' ? shortCode : null, // PayHero usually needs till # in both for Tills
+        });
+
+        if (result.data['success'] != true) {
+          throw Exception("Activation failed.");
+        }
+      }
+
+      setState(() {
+        _setupProgress = 0.7;
+        _statusMessage = "Finalizing secure link...";
+      });
+
+      // Save Local Settings
       await DatabaseHelper.instance.updateSettings({
         'mpesa_mode': _mpesaMode,
         'mpesa_number': mpesaNum,
-        'payhero_channel_id': channelId,
-        'payhero_auth': authKey,
+        'mpesa_channel_type': _channelType,
+        'mpesa_shortcode': shortCode,
+        'mpesa_account': tillNumber,
       });
 
       setState(() {
-        _setupProgress = 0.6;
-        _statusMessage = "Securing cloud storage for $shopName...";
+        _setupProgress = 0.8;
+        _statusMessage = "Linking account to secure cloud...";
       });
 
-      // Step 3: Cloud Initialization
+      // Cloud Initialization with UID linking
       await FirebaseFirestore.instance.collection('shops').doc(shopId).set({
         'shop_name': shopName,
+        'owner_uid': uid, // 👈 Link to account
         'wallet_balance': 0.0,
         'mpesa_config': _mpesaMode,
-        'auto_renew': false, // 🚀 Default auto-renew to off
-        'is_pro': false,     // 🚀 Default Pro to off
-        'created_at': FieldValue.serverTimestamp(),
+        'mpesa_channel_type': _channelType,
+        'mpesa_shortcode': shortCode,
+        'mpesa_account': tillNumber,
+        'auto_renew': false,
+        'is_pro': false,
+        'createdAt': FieldValue.serverTimestamp(),
         'is_active': true,
       }, SetOptions(merge: true));
 
       setState(() {
-        _setupProgress = 0.9;
-        _statusMessage = "Finalizing your dashboard...";
+        _setupProgress = 1.0;
+        _statusMessage = "Finalizing settings...";
       });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_first_run', false);
       
-      setState(() {
-        _setupProgress = 1.0;
-        _statusMessage = "Ready to sell!";
-      });
-
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Setup failed. Check your internet connection.")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Setup failed.")));
     }
-  }
-
-  void _showReceiptPreview(BuildContext context) {
-    if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a shop name first!")),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    _nameController.text.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.courierPrime(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const Text("OFFICIAL RECEIPT", style: TextStyle(fontSize: 10, color: Colors.black)),
-                  const Divider(color: Colors.black),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("1x Sample Item", style: GoogleFonts.courierPrime(color: Colors.black, fontSize: 12)),
-                      Text("500", style: GoogleFonts.courierPrime(color: Colors.black, fontSize: 12)),
-                    ],
-                  ),
-                  const Divider(color: Colors.black),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("TOTAL", style: GoogleFonts.courierPrime(fontWeight: FontWeight.bold, color: Colors.black)),
-                      Text("KES 500.00", style: GoogleFonts.courierPrime(fontWeight: FontWeight.bold, color: Colors.black)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const Text("Thank you for shopping!", style: TextStyle(fontSize: 9, color: Colors.black)),
-                ],
-              ),
-            ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Looks Good!"))
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: cardGray,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 40.0),
-          child: Column(
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 40),
-              if (!_isPaymentSetup) _buildShopNameView() else _buildPaymentSetupView(),
-              const SizedBox(height: 20),
-              if (!_isLoading) _buildFooterText(),
-            ],
+      backgroundColor: Colors.white,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cardGray, Colors.white],
+            stops: const [0.0, 0.4],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+            child: Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 48),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  transitionBuilder: (Widget child, Animation<double> animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.1),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey<String>(
+                      _isAuthComplete 
+                          ? (_isPaymentSetup ? 'payment' : 'shop') 
+                          : (_isOTPSent ? 'otp' : 'auth')
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 40,
+                            offset: const Offset(0, 20),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_isAuthComplete) _buildAuthView()
+                          else if (!_isPaymentSetup) _buildShopNameView() 
+                          else _buildPaymentSetupView(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                if (!_isLoading) _buildFooterText(),
+              ],
+            ),
           ),
         ),
       ),
@@ -251,20 +349,82 @@ void _finishSetup() async {
   Widget _buildHeader() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
-          ]),
-          child: const Icon(Icons.storefront_rounded, size: 60, color: primaryOrange),
+        Hero(
+          tag: 'logo',
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: primaryOrange.withOpacity(0.12),
+                  blurRadius: 32,
+                  offset: const Offset(0, 16),
+                )
+              ],
+            ),
+            child: const Icon(Icons.storefront_rounded, size: 56, color: primaryOrange),
+          ),
         ),
-        const SizedBox(height: 20),
-        Text("M-Bizna", style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: textDark)),
+        const SizedBox(height: 28),
         Text(
-          _isPaymentSetup ? "Configure your payments" : "Let's get your shop ready.",
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(color: Colors.grey.shade600, fontSize: 15),
+          "M-Bizna",
+          style: GoogleFonts.outfit(
+            fontSize: 34,
+            fontWeight: FontWeight.w800,
+            color: textDark,
+            letterSpacing: -0.5,
+          ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          _isAuthComplete ? "Business Profile" : "Secure Authentication",
+          style: GoogleFonts.poppins(
+            color: primaryOrange,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            _isAuthComplete 
+                ? "Let's personalize your store experience." 
+                : "Enter your mobile number to get started with M-Bizna Cloud.",
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              color: Colors.grey.shade500,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthView() {
+    return Column(
+      children: [
+        if (!_isOTPSent) ...[
+          _buildInputField(_phoneController, "Phone Number", "+254...", Icons.phone),
+          const SizedBox(height: 20),
+          if (_isLoading) _buildProgressUI()
+          else _buildWideButton("SEND VERIFICATION CODE", _verifyPhone),
+        ] else ...[
+          _buildModernOTPInput(),
+          const SizedBox(height: 30),
+          if (_isLoading) _buildProgressUI()
+          else _buildWideButton("VERIFY & RESTORE", _verifyOTP),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => setState(() => _isOTPSent = false), 
+            child: Text("Change phone number", style: TextStyle(color: Colors.grey.shade600, fontSize: 13))
+          )
+        ]
       ],
     );
   }
@@ -273,12 +433,6 @@ void _finishSetup() async {
     return Column(
       children: [
         _buildInputField(_nameController, "Business Name", "e.g. Mama Njuguna's Grocery", Icons.edit_note),
-        const SizedBox(height: 30),
-        TextButton.icon(
-          onPressed: () => _showReceiptPreview(context),
-          icon: const Icon(Icons.receipt_long, color: primaryOrange, size: 20),
-          label: Text("Preview Receipt", style: GoogleFonts.poppins(color: primaryOrange, fontWeight: FontWeight.w600)),
-        ),
         const SizedBox(height: 40),
         _buildWideButton("NEXT STEP", () {
           if (_nameController.text.trim().isNotEmpty) setState(() => _isPaymentSetup = true);
@@ -294,30 +448,32 @@ void _finishSetup() async {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text("How will customers pay?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text("Payment Configuration", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
             if (_mpesaMode == 'Automated')
-              IconButton(
-                icon: const Icon(Icons.help_outline, color: primaryOrange),
-                onPressed: _showSetupInstructions,
-              ),
+              IconButton(icon: const Icon(Icons.help_outline, color: primaryOrange), onPressed: _showSetupInstructions),
           ],
         ),
         const SizedBox(height: 10),
         _buildMpesaToggle(),
         const SizedBox(height: 20),
         if (_mpesaMode == 'Manual')
-          _buildInputField(_numberController, "Your M-Pesa Number", "07XX XXX XXX", Icons.phone_android)
+          _buildInputField(_numberController, "Your M-Pesa Number", "07XX... (For Display Only)", Icons.phone_android)
         else ...[
-          _buildInputField(_channelController, "PayHero Channel ID", "1234", Icons.numbers),
-          const SizedBox(height: 15),
-          _buildInputField(_authController, "API Auth Token", "Basic Auth Key", Icons.key),
+          _buildChannelTypeToggle(),
+          const SizedBox(height: 20),
+          if (_channelType == 'Paybill') ...[
+            _buildInputField(_shortCodeController, "Paybill Number", "e.g. 400222", Icons.numbers),
+            const SizedBox(height: 15),
+            _buildInputField(_tillNumberController, "Account Number (e.g. SHOP)", "Optional", Icons.badge),
+          ] else ...[
+            _buildInputField(_shortCodeController, "Till Number", "e.g. 123456", Icons.store),
+          ],
         ],
         const SizedBox(height: 40),
         _isLoading ? _buildProgressUI() : Column(
           children: [
             _buildWideButton("FINISH SETUP", _finishSetup),
             TextButton(onPressed: () => setState(() => _isPaymentSetup = false), child: const Text("Back", style: TextStyle(color: Colors.grey))),
-            TextButton(onPressed: _finishSetup, child: const Text("Skip for now", style: TextStyle(color: primaryOrange, fontSize: 12))),
           ],
         ),
       ],
@@ -327,42 +483,170 @@ void _finishSetup() async {
   Widget _buildMpesaToggle() {
     return Column(
       children: [
-        RadioListTile(
-          title: const Text("Manual (Pochi/Personal)", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          subtitle: const Text("Confirm payments via SMS", style: TextStyle(fontSize: 11)),
-          value: 'Manual',
-          groupValue: _mpesaMode,
-          activeColor: primaryOrange,
-          onChanged: (val) => setState(() => _mpesaMode = val as String),
+        _buildRadioCard(
+          "Manual (Pochi/Personal)", 
+          "Free - Confirm payments via SMS", 
+          'Manual', 
+          (val) => setState(() => _mpesaMode = val)
         ),
-        RadioListTile(
-          title: const Text("Automated (STK Push)", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          subtitle: const Text("Professional API verification", style: TextStyle(fontSize: 11)),
-          value: 'Automated',
-          groupValue: _mpesaMode,
-          activeColor: primaryOrange,
-          onChanged: (val) => setState(() => _mpesaMode = val as String),
+        _buildRadioCard(
+          "Automated (STK Push)", 
+          "Pro - Auto-verify. Fees apply per sale.", 
+          'Automated', 
+          (val) => setState(() => _mpesaMode = val),
+          onInfoTap: _showPricingSheet,
         ),
       ],
     );
   }
 
-  Widget _buildInputField(TextEditingController ctrl, String label, String hint, IconData icon) {
-    return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 5))
-      ]),
-      child: TextField(
-        controller: ctrl,
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          prefixIcon: Icon(icon, color: primaryOrange),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+  Widget _buildChannelTypeToggle() {
+    return Row(
+      children: [
+        Expanded(child: _buildTypeButton("Paybill", _channelType == 'Paybill', () => setState(() => _channelType = 'Paybill'))),
+        const SizedBox(width: 12),
+        Expanded(child: _buildTypeButton("Buy Goods (Till)", _channelType == 'Till', () => setState(() => _channelType = 'Till'))),
+      ],
+    );
+  }
+
+  Widget _buildTypeButton(String label, bool isSelected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryOrange : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade300),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : Colors.grey.shade600,
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRadioCard(String title, String subtitle, String value, Function(String) onChanged, {VoidCallback? onInfoTap}) {
+    return Card(
+      elevation: 0,
+      color: cardGray,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: RadioListTile(
+        title: Row(
+          children: [
+            Expanded(child: Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textDark))),
+            if (onInfoTap != null)
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 20, color: primaryOrange),
+                onPressed: onInfoTap,
+              ),
+          ],
+        ),
+        subtitle: Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600)),
+        value: value,
+        groupValue: _mpesaMode,
+        activeColor: primaryOrange,
+        onChanged: (val) => onChanged(val as String),
+      ),
+    );
+  }
+
+  void _showPricingSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Automated STK Pricing", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text("Fees are deducted from your M-Bizna wallet per successful sale.", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: 24),
+            _buildPriceRow("Sale Amount", "Total Fee", isHeader: true),
+            const Divider(),
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildPriceRow("KES 1 - 49", "KES 2"),
+                  _buildPriceRow("KES 50 - 499", "KES 8"),
+                  _buildPriceRow("KES 500 - 999", "KES 12"),
+                  _buildPriceRow("KES 1k - 1.5k", "KES 17"),
+                  _buildPriceRow("KES 1.5k - 2.5k", "KES 22"),
+                  _buildPriceRow("KES 2.5k - 5k", "KES 27 - 32"),
+                  _buildPriceRow("Over 5k", "KES 42+"),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text("*Includes PayHero cost + KES 2 service fee", style: GoogleFonts.poppins(fontSize: 11, fontStyle: FontStyle.italic)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriceRow(String label, String price, {bool isHeader = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.poppins(fontSize: 14, fontWeight: isHeader ? FontWeight.bold : FontWeight.w500)),
+          Text(price, style: GoogleFonts.poppins(fontSize: 14, fontWeight: isHeader ? FontWeight.bold : FontWeight.w800, color: isHeader ? textDark : primaryOrange)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField(TextEditingController ctrl, String label, String hint, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textDark.withOpacity(0.6),
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: cardGray,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: TextField(
+            controller: ctrl,
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400, fontSize: 14),
+              prefixIcon: Icon(icon, color: primaryOrange, size: 22),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -371,8 +655,8 @@ void _finishSetup() async {
       width: double.infinity,
       height: 55,
       child: ElevatedButton(
-        onPressed: onPressed,
         style: ElevatedButton.styleFrom(backgroundColor: textDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+        onPressed: onPressed,
         child: Text(text, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
@@ -381,21 +665,73 @@ void _finishSetup() async {
   Widget _buildProgressUI() {
     return Column(
       children: [
-        Text("${(_setupProgress * 100).toInt()}%", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryOrange, fontSize: 20)),
+        Text("${(_setupProgress * 100).toInt()}%", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryOrange, fontSize: 18)),
         const SizedBox(height: 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: LinearProgressIndicator(value: _setupProgress, backgroundColor: Colors.grey.shade300, valueColor: const AlwaysStoppedAnimation<Color>(primaryOrange), minHeight: 8),
+          child: LinearProgressIndicator(value: _setupProgress, backgroundColor: Colors.grey.shade300, valueColor: const AlwaysStoppedAnimation<Color>(primaryOrange), minHeight: 6),
         ),
         const SizedBox(height: 10),
-        Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.grey.shade600, fontSize: 13)),
+        Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.grey.shade600, fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _buildModernOTPInput() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(6, (index) {
+        return Container(
+          width: 45,
+          height: 55,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4)
+              )
+            ],
+            border: Border.all(
+              color: _otpNodes[index].hasFocus ? primaryOrange : Colors.transparent,
+              width: 2
+            ),
+          ),
+          child: TextField(
+            controller: _otpControllers[index],
+            focusNode: _otpNodes[index],
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            maxLength: 1,
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+            decoration: const InputDecoration(
+              counterText: "",
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero
+            ),
+            onChanged: (value) {
+              if (value.isNotEmpty && index < 5) {
+                _otpNodes[index + 1].requestFocus();
+              } else if (value.isEmpty && index > 0) {
+                _otpNodes[index - 1].requestFocus();
+              }
+              // If last box is filled, try to verify automatically
+              if (index == 5 && value.isNotEmpty) {
+                _verifyOTP();
+              }
+              setState(() {}); // Rebuild for border color
+            },
+          ),
+        );
+      }),
     );
   }
 
   Widget _buildFooterText() {
     return Text(
-      "By tapping 'Finish Setup' you agree to our\nTerms and Privacy Policy",
+      "Securely powered by M-Bizna Cloud",
       textAlign: TextAlign.center,
       style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey),
     );
