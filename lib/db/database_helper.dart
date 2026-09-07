@@ -19,9 +19,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 6, // 🚀 Incremented version for new features
+      version: 8, // Incremented version for daily closings, suppliers, and returns
       onCreate: _createDB,
-      onUpgrade: _onUpgrade, // 👈 Added migration handler
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -58,6 +58,78 @@ class DatabaseHelper {
         print("Migration v6 error (columns might exist): $e");
       }
     }
+    if (oldVersion < 7) {
+      // Migrate to v7: Add stock_movements and customer_ledger tables
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS stock_movements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          change_qty REAL NOT NULL,
+          previous_qty REAL NOT NULL,
+          new_qty REAL NOT NULL,
+          type TEXT NOT NULL,
+          reason TEXT,
+          date_time TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS customer_ledger (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          amount REAL NOT NULL,
+          balance_after REAL NOT NULL,
+          note TEXT,
+          date_time TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 8) {
+      // Migrate to v8: Add daily_closings, suppliers, and returns tables
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS daily_closings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          starting_float REAL NOT NULL,
+          gross_sales REAL NOT NULL,
+          cash_sales REAL NOT NULL,
+          mpesa_sales REAL NOT NULL,
+          credit_sales REAL NOT NULL,
+          total_profit REAL NOT NULL,
+          total_expenses REAL NOT NULL,
+          net_profit REAL NOT NULL,
+          expected_cash REAL NOT NULL,
+          actual_cash REAL NOT NULL,
+          cash_difference REAL NOT NULL,
+          closed_at TEXT NOT NULL,
+          notes TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS suppliers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          company TEXT,
+          payment_details TEXT,
+          notes TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS returns (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sale_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          quantity REAL NOT NULL,
+          refund_amount REAL NOT NULL,
+          reason TEXT NOT NULL,
+          date_time TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -74,8 +146,8 @@ class DatabaseHelper {
         barcode $textType,
         buy_price $realType,
         sell_price $realType,
-        stock_qty $realType, -- 👈 Changed to REAL for decimal stock (e.g. 50.5 kg)
-        unit TEXT DEFAULT 'Pcs', -- 👈 NEW: 'Kg', 'Litre', 'Bunch'
+        stock_qty $realType,
+        unit TEXT DEFAULT 'Pcs',
         image_path TEXT 
       )
     ''');
@@ -86,7 +158,7 @@ class DatabaseHelper {
         id $idType,
         product_id $intType,
         customer_id INTEGER, 
-        quantity $realType, -- 👈 Changed to REAL for decimal sales (e.g. 1.75 kg)
+        quantity $realType,
         total_price $realType,
         profit $realType,
         payment_method TEXT,
@@ -125,27 +197,102 @@ class DatabaseHelper {
         date_time $textType
       )
     ''');
-    await db.execute('''
-  CREATE TABLE settings (
-    id INTEGER PRIMARY KEY,
-    mpesa_mode TEXT DEFAULT 'Manual', 
-    mpesa_number TEXT,               
-    payhero_channel_id TEXT,         
-    payhero_auth TEXT,
-    mpesa_channel_type TEXT DEFAULT 'Paybill', -- 👈 NEW
-    mpesa_shortcode TEXT, -- 👈 NEW
-    mpesa_account TEXT -- 👈 NEW
-  )
-''');
-await db.insert('settings', {'id': 1, 'mpesa_mode': 'Manual'});
 
-    // 6. Expenses
+    // 6. Settings
+    await db.execute('''
+      CREATE TABLE settings (
+        id INTEGER PRIMARY KEY,
+        mpesa_mode TEXT DEFAULT 'Manual', 
+        mpesa_number TEXT,               
+        payhero_channel_id TEXT,         
+        payhero_auth TEXT,
+        mpesa_channel_type TEXT DEFAULT 'Paybill',
+        mpesa_shortcode TEXT,
+        mpesa_account TEXT
+      )
+    ''');
+    await db.insert('settings', {'id': 1, 'mpesa_mode': 'Manual'});
+
+    // 7. Expenses
     await db.execute('''
       CREATE TABLE expenses (
         id $idType,
         description $textType,
         amount $realType,
         category $textType,
+        date_time $textType
+      )
+    ''');
+
+    // 8. Stock Movements (Audit Trail)
+    await db.execute('''
+      CREATE TABLE stock_movements (
+        id $idType,
+        product_id $intType,
+        change_qty $realType,
+        previous_qty $realType,
+        new_qty $realType,
+        type $textType,
+        reason TEXT,
+        date_time $textType
+      )
+    ''');
+
+    // 9. Customer Credit/Repayment Ledger
+    await db.execute('''
+      CREATE TABLE customer_ledger (
+        id $idType,
+        customer_id $intType,
+        type $textType,
+        amount $realType,
+        balance_after $realType,
+        note TEXT,
+        date_time $textType
+      )
+    ''');
+
+    // 10. Daily Closings (Z-Reports)
+    await db.execute('''
+      CREATE TABLE daily_closings (
+        id $idType,
+        date $textType,
+        starting_float $realType,
+        gross_sales $realType,
+        cash_sales $realType,
+        mpesa_sales $realType,
+        credit_sales $realType,
+        total_profit $realType,
+        total_expenses $realType,
+        net_profit $realType,
+        expected_cash $realType,
+        actual_cash $realType,
+        cash_difference $realType,
+        closed_at $textType,
+        notes TEXT
+      )
+    ''');
+
+    // 11. Suppliers
+    await db.execute('''
+      CREATE TABLE suppliers (
+        id $idType,
+        name $textType,
+        phone $textType,
+        company TEXT,
+        payment_details TEXT,
+        notes TEXT
+      )
+    ''');
+
+    // 12. Returns & Refunds
+    await db.execute('''
+      CREATE TABLE returns (
+        id $idType,
+        sale_id $intType,
+        product_id $intType,
+        quantity $realType,
+        refund_amount $realType,
+        reason $textType,
         date_time $textType
       )
     ''');

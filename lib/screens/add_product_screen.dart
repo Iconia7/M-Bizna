@@ -147,6 +147,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Future<void> _scanBarcode() async {
     final scannedCode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SimpleScannerPage()),
     );
     
     if (!mounted) return;

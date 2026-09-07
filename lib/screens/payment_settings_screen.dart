@@ -3,6 +3,7 @@ import 'package:duka_manager/services/payhero_service.dart';
 import 'package:duka_manager/widgets/feedback_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For clipboard functionality
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:provider/provider.dart';
@@ -141,29 +142,52 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
   }
 
   Future<void> _testConnection() async {
-    if (_authController.text.isEmpty || _shortCodeController.text.isEmpty) {
-      FeedbackDialog.show(context, title: "Missing Info", message: "Link your business or enter credentials first.", isSuccess: false);
+    final phone = _numberController.text.trim();
+    if (phone.isEmpty) {
+      FeedbackDialog.show(
+        context, 
+        title: "Phone Required", 
+        message: "Please enter your M-Pesa phone number above to receive a test STK push.", 
+        isSuccess: false
+      );
       return;
     }
 
     setState(() => _isTesting = true);
 
-    final success = await PayHeroService().initiateSTKPush(
-      phoneNumber: "254700000000", 
+    final basicAuth = _authController.text.trim().isNotEmpty 
+        ? _authController.text.trim() 
+        : (dotenv.env['PAYHERO_BASIC_AUTH'] ?? "S0dxNGcxSnZhaU1qUGFPVkFBMHo6OXUwMmpnYUkzUkhMQTJtUXhMVTg2aTg2OUd3RHo4eFNGM0JFMFJSYg==");
+    final channelId = _shortCodeController.text.trim().isNotEmpty 
+        ? _shortCodeController.text.trim() 
+        : (dotenv.env['PAYHERO_CHANNEL_ID'] ?? "3145");
+
+    final invoiceId = await PayHeroService().initiateSTKPush(
+      phoneNumber: phone, 
       amount: 1.0, 
       externalReference: "TEST|${DateTime.now().millisecondsSinceEpoch}",
-      basicAuth: _authController.text,
-      channelId: _shortCodeController.text, // Assuming shortcode is used as channelId for manual entry
+      basicAuth: basicAuth,
+      channelId: channelId,
     );
 
     setState(() => _isTesting = false);
 
     if (!mounted) return;
 
-    if (success != null) {
-      FeedbackDialog.show(context, title: "Connected!", message: "PayHero credentials are valid.", isSuccess: true);
+    if (invoiceId != null) {
+      FeedbackDialog.show(
+        context, 
+        title: "STK Push Sent!", 
+        message: "Test STK push has been sent to $phone. PayHero connection is working perfectly.", 
+        isSuccess: true
+      );
     } else {
-      FeedbackDialog.show(context, title: "Failed", message: "Check your credentials.", isSuccess: false);
+      FeedbackDialog.show(
+        context, 
+        title: "Connection Failed", 
+        message: "Could not send STK push. Please check your phone number and internet connection.", 
+        isSuccess: false
+      );
     }
   }
 

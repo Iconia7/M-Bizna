@@ -1,9 +1,10 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
-const axios = require("axios");
 
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 // --- 💳 PAYHERO CALLBACK (V2) ---
 exports.payheroCallback = onRequest(async (req, res) => {
@@ -163,6 +164,7 @@ exports.activateMerchantChannel = onCall(async (request) => {
             description: shop_name || `Shop_${shop_id}`
         };
 
+        const axios = require("axios");
         console.log("📤 Sending Payload to PayHero:", JSON.stringify(payload));
 
         const response = await axios.post('https://backend.payhero.co.ke/api/v2/payment_channels', payload, {
@@ -224,3 +226,230 @@ function calculatePayHeroFee(amount) {
     if (amount <= 749999) return 275;
     return 320;
 }
+
+// --- 📱 AFRICA'S TALKING SMS OTP VERIFICATION ---
+
+function normalizePhoneNumber(phone) {
+    if (!phone) return null;
+    let cleaned = phone.toString().replace(/[\s\-\+\(\)]/g, '');
+
+    // Check test reviewer bypass number (+16505551234)
+    if (cleaned === '16505551234') {
+        return '+16505551234';
+    }
+
+    // Standard Kenyan mobile normalization:
+    // Starts with 0 (e.g. 0712345678 or 0117814250 - 10 digits)
+    if (cleaned.startsWith('0') && cleaned.length === 10) {
+        cleaned = '254' + cleaned.substring(1);
+    } 
+    // 9 digits starting with 7 or 1 (e.g. 712345678 or 117814250)
+    else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
+        cleaned = '254' + cleaned;
+    }
+
+    // Must start with 254 and have 12 digits, with mobile prefix 7 or 1
+    if (cleaned.startsWith('254') && cleaned.length === 12) {
+        const mobilePrefix = cleaned.charAt(3); // character after '254'
+        if (mobilePrefix === '7' || mobilePrefix === '1') {
+            return '+' + cleaned;
+        }
+    }
+
+    return null; // Reject all non-Kenyan and invalid formats
+}
+
+exports.sendPhoneOTP = onCall(async (request) => {
+    const { phone_number } = request.data || {};
+
+    if (!phone_number) {
+        throw new HttpsError('invalid-argument', 'Phone number is required.');
+    }
+
+    // 1. Strict Kenyan phone number validation
+    const normalizedPhone = normalizePhoneNumber(phone_number);
+    if (!normalizedPhone) {
+        throw new HttpsError(
+            'invalid-argument',
+            'Invalid phone number. Only Kenyan mobile numbers (e.g. 07XXXXXXXX or 01XXXXXXXX) are supported.'
+        );
+    }
+
+    // 2. Test bypass for Play Store review and testing bot (never hits Africa's Talking)
+    if (normalizedPhone === '+254117814250' || normalizedPhone === '+16505551234') {
+        await admin.firestore().collection('phone_verifications').doc(normalizedPhone).set({
+            code: '123456',
+            expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60 * 60 * 1000)),
+            attempts: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { success: true, message: 'Test verification code generated.' };
+    }
+
+    // 3. Strict 24-hour Rate Limiter & 60s cooldown
+    const rateLimitRef = admin.firestore().collection('otp_rate_limits').doc(normalizedPhone);
+    const rateLimitDoc = await rateLimitRef.get();
+    const nowMs = Date.now();
+    const oneDayAgoMs = nowMs - 24 * 60 * 60 * 1000;
+    let recentAttempts = [];
+
+    if (rateLimitDoc.exists) {
+        const rateData = rateLimitDoc.data() || {};
+
+        // Cooldown check: 60 seconds minimum between consecutive requests
+        if (rateData.lastAttemptAt) {
+            const lastAttemptMs = rateData.lastAttemptAt.toMillis ? rateData.lastAttemptAt.toMillis() : new Date(rateData.lastAttemptAt).getTime();
+            const timeSinceLastSec = (nowMs - lastAttemptMs) / 1000;
+            if (timeSinceLastSec < 60) {
+                const waitSec = Math.ceil(60 - timeSinceLastSec);
+                throw new HttpsError(
+                    'resource-exhausted',
+                    `Please wait ${waitSec} second${waitSec === 1 ? '' : 's'} before requesting another verification code.`
+                );
+            }
+        }
+
+        // Filter attempts to rolling 24-hour window
+        const rawAttempts = Array.isArray(rateData.attempts) ? rateData.attempts : [];
+        recentAttempts = rawAttempts
+            .map(t => (t && typeof t.toMillis === 'function') ? t.toMillis() : (typeof t === 'number' ? t : new Date(t).getTime()))
+            .filter(timestamp => !isNaN(timestamp) && timestamp > oneDayAgoMs);
+
+        const MAX_OTP_PER_24H = 3;
+        if (recentAttempts.length >= MAX_OTP_PER_24H) {
+            recentAttempts.sort((a, b) => a - b);
+            const oldestAttemptMs = recentAttempts[0];
+            const msUntilReset = (oldestAttemptMs + 24 * 60 * 60 * 1000) - nowMs;
+            const hoursLeft = Math.max(1, Math.ceil(msUntilReset / (1000 * 60 * 60)));
+            throw new HttpsError(
+                'resource-exhausted',
+                `Daily limit reached: Maximum ${MAX_OTP_PER_24H} verification codes allowed per 24 hours. Please try again in ${hoursLeft} hour${hoursLeft === 1 ? '' : 's'}.`
+            );
+        }
+    }
+
+    // Generate secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP in Firestore (10 min expiry)
+    await admin.firestore().collection('phone_verifications').doc(normalizedPhone).set({
+        code: otp,
+        expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
+        attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Record this attempt in rate limiter
+    recentAttempts.push(nowMs);
+    await rateLimitRef.set({
+        phoneNumber: normalizedPhone,
+        attempts: recentAttempts.map(ts => admin.firestore.Timestamp.fromMillis(ts)),
+        lastAttemptAt: admin.firestore.Timestamp.fromMillis(nowMs),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    try {
+        const atApiKey = process.env.AT_API_KEY;
+        const atUsername = process.env.AT_USERNAME || 'dita';
+        const atSenderId = process.env.AT_SENDER_ID || 'NexoraKE';
+
+        if (!atApiKey) {
+            console.error("❌ ERROR: AT_API_KEY is not set in environment.");
+            throw new HttpsError('failed-precondition', 'Africa\'s Talking API Key is not configured on the server.');
+        }
+
+        const payload = new URLSearchParams({
+            username: atUsername,
+            to: normalizedPhone,
+            message: `Your M-Bizna verification code is ${otp}. Valid for 10 minutes.`,
+            from: atSenderId
+        });
+
+        const axios = require("axios");
+        console.log(`📤 Sending SMS to ${normalizedPhone} via Africa's Talking (Sender: ${atSenderId}, User: ${atUsername})`);
+
+        const response = await axios.post('https://api.africastalking.com/version1/messaging', payload.toString(), {
+            headers: {
+                'apiKey': atApiKey,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+        });
+
+        console.log("✅ Africa's Talking Response:", JSON.stringify(response.data));
+
+        return {
+            success: true,
+            message: 'Verification code sent successfully.'
+        };
+    } catch (err) {
+        console.error("🔥 Africa's Talking SMS Error:", err.response ? JSON.stringify(err.response.data) : err.message);
+        if (err instanceof HttpsError) throw err;
+        throw new HttpsError('internal', 'Failed to send SMS verification code. Please try again.');
+    }
+});
+
+exports.verifyPhoneOTP = onCall(async (request) => {
+    const { phone_number, code } = request.data || {};
+
+    if (!phone_number || !code) {
+        throw new HttpsError('invalid-argument', 'Phone number and verification code are required.');
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone_number.toString().trim());
+    if (!normalizedPhone) {
+        throw new HttpsError('invalid-argument', 'Invalid phone number. Only Kenyan mobile numbers are supported.');
+    }
+    const docRef = admin.firestore().collection('phone_verifications').doc(normalizedPhone);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+        throw new HttpsError('not-found', 'No verification code was requested for this phone number.');
+    }
+
+    const data = doc.data();
+
+    if (data.expiresAt.toDate() < new Date()) {
+        await docRef.delete();
+        throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new one.');
+    }
+
+    if (data.attempts >= 5) {
+        await docRef.delete();
+        throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new code.');
+    }
+
+    if (data.code !== code.toString().trim()) {
+        await docRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
+        throw new HttpsError('invalid-argument', 'Invalid verification code. Please try again.');
+    }
+
+    // Code is valid - clean up
+    await docRef.delete();
+
+    // Find or create Firebase Auth user
+    let userRecord;
+    try {
+        userRecord = await admin.auth().getUserByPhoneNumber(normalizedPhone);
+    } catch (err) {
+        if (err.code === 'auth/user-not-found') {
+            userRecord = await admin.auth().createUser({
+                phoneNumber: normalizedPhone,
+                displayName: `Merchant (${normalizedPhone.slice(-4)})`
+            });
+        } else {
+            console.error("🔥 Firebase User lookup error:", err);
+            throw new HttpsError('internal', 'Authentication failed during user creation.');
+        }
+    }
+
+    // Mint custom auth token for Flutter Firebase Auth client
+    const customToken = await admin.auth().createCustomToken(userRecord.uid);
+
+    return {
+        success: true,
+        custom_token: customToken,
+        uid: userRecord.uid,
+        phone_number: normalizedPhone
+    };
+});

@@ -12,6 +12,8 @@ import 'providers/inventory_provider.dart';
 import 'providers/sales_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/shop_provider.dart';
+import 'providers/supplier_provider.dart';
+import 'providers/assistant_provider.dart';
 import 'screens/home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:duka_manager/providers/auth_provider.dart';
@@ -58,6 +60,8 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider(create: (_) => SupplierProvider()),
+        ChangeNotifierProvider(create: (_) => AssistantProvider()),
         ChangeNotifierProxyProvider<ShopProvider, WalletProvider>(
           create: (_) => WalletProvider(),
           update: (_, shop, wallet) {

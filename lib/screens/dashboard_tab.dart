@@ -10,10 +10,17 @@ import '../providers/report_provider.dart';
 import '../providers/inventory_provider.dart';
 import 'add_product_screen.dart';
 import 'pos_screen.dart';
+import 'reports_screen.dart';
 import 'settings_screen.dart';
+import 'close_day_screen.dart';
+import 'suppliers_screen.dart';
+import 'assistant_screen.dart';
+import 'subscription_screen.dart';
 import '../providers/wallet_provider.dart';
 
 class DashboardTab extends StatefulWidget {
+  const DashboardTab({super.key});
+
   @override
   _DashboardTabState createState() => _DashboardTabState();
 }
@@ -37,7 +44,7 @@ class _DashboardTabState extends State<DashboardTab> {
     Provider.of<WalletProvider>(context, listen: false).startBalanceListener(shopId);
   }
 
-  // 🎨 THEME COLORS (Dynamic Getters)
+  // THEME COLORS
   Color get _primaryOrange => const Color(0xFFFF6B00);
   Color get _surfaceColor => Theme.of(context).colorScheme.surface;
   Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F9) : const Color(0xFF121212);
@@ -58,279 +65,407 @@ class _DashboardTabState extends State<DashboardTab> {
     final wallet = Provider.of<WalletProvider>(context);
     final shop = Provider.of<ShopProvider>(context);
 
-
     // Live Calculations
     double totalStockValue = inventory.products.fold(0, (sum, item) => sum + (item.buyPrice * item.stockQty));
     int totalItems = inventory.products.length;
     int outOfStock = inventory.products.where((i) => i.stockQty == 0).length;
 
     return Scaffold(
-      backgroundColor: _containerColor, // Matches your theme's grey background
+      backgroundColor: _containerColor,
       body: RefreshIndicator(
         onRefresh: _loadData,
         color: _primaryOrange,
         child: SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(20, 60, 20, 20),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 55, 20, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Header
+              // 1. Header with greeting and profile
               Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(getGreeting(), style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade600)),
-        Row(
-          children: [
-            Text(
-              shop.shopName,
-              style: GoogleFonts.poppins(
-                fontSize: 22, 
-                fontWeight: FontWeight.bold, 
-                color: _textColor
-              )
-            ),
-            const SizedBox(width: 8),
-            // 🚀 PRO / FREE BADGE
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: shop.isProActive ? Colors.green : Colors.grey.shade400,
-                borderRadius: BorderRadius.circular(5)
-              ),
-              child: Text(
-                shop.isProActive ? "PRO" : "FREE",
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontSize: 10, 
-                  fontWeight: FontWeight.bold
-                ),
-              ),
-            )
-          ],
-        ),
-        // ⏳ EXPIRY TEXT (Only shows if they are a Pro user)
-        if (shop.isProActive)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              "Pro active: ${shop.daysRemaining} days left", 
-              style: GoogleFonts.poppins(
-                fontSize: 11, 
-                fontWeight: FontWeight.w500, 
-                color: Colors.green.shade700
-              )
-            ),
-          ),
-      ],
-    ),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(getGreeting(), style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
+                      Row(
+                        children: [
+                          Text(
+                            shop.shopName,
+                            style: GoogleFonts.poppins(
+                              fontSize: 22, 
+                              fontWeight: FontWeight.bold, 
+                              color: _textColor
+                            )
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: shop.isProActive ? Colors.green : Colors.grey.shade400,
+                              borderRadius: BorderRadius.circular(6)
+                            ),
+                            child: Text(
+                              shop.isProActive ? "PRO" : "FREE",
+                              style: const TextStyle(
+                                color: Colors.white, 
+                                fontSize: 10, 
+                                fontWeight: FontWeight.bold
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                      if (shop.isProActive)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            "Pro active: ${shop.daysRemaining} days left", 
+                            style: GoogleFonts.poppins(
+                              fontSize: 11, 
+                              fontWeight: FontWeight.w500, 
+                              color: Colors.green.shade700
+                            )
+                          ),
+                        ),
+                    ],
+                  ),
                   GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen())),
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(color: _primaryOrange, shape: BoxShape.circle),
                       child: Container(
-                        height: 45, width: 45,
+                        height: 44, width: 44,
                         decoration: BoxDecoration(
                           color: _cardColor,
                           shape: BoxShape.circle,
-                          image: DecorationImage(image: NetworkImage("https://ui-avatars.com/api/?name=${shop.shopName}&background=1A1A1A&color=fff"), fit: BoxFit.cover)
+                          image: DecorationImage(
+                            image: NetworkImage("https://ui-avatars.com/api/?name=${shop.shopName}&background=1A1A1A&color=fff"), 
+                            fit: BoxFit.cover
+                          )
                         ),
                       ),
                     ),
                   )
                 ],
               ),
-              SizedBox(height: 25),
-
-              // 2. Hero Card (The "Bizna Card" in Orange)
-              if (shop.isOwner) 
-                _buildCreativeHeroCard(totalStockValue, _primaryOrange, shop.isProActive),
               
-              if (shop.isOwner) 
-                const SizedBox(height: 25),
+              const SizedBox(height: 16),
 
+              // 1.5 SMART ASSISTANT INTERACTIVE HERO BAR
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WalletScreen())),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AssistantScreen())),
                 child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: _cardColor,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _primaryOrange.withOpacity(0.3)),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 4))
+                      BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Row(
                     children: [
-                      // Icon with soft background
                       Container(
-                        padding: EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: _primaryOrange.withOpacity(0.1),
+                          color: _primaryOrange.withOpacity(0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.account_balance_wallet, color: _primaryOrange, size: 24),
+                        child: Icon(Icons.smart_toy_outlined, color: _primaryOrange, size: 20),
                       ),
-                      SizedBox(width: 15),
-                      // Text Info
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("App Balance", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-                          Text(
-                            "KES ${wallet.balance.toStringAsFixed(2)}", 
-                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)
-                          ),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Ask M-Bizna Smart Assistant",
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _textColor),
+                            ),
+                            Text(
+                              "Sales, profit, top debtors, low stock...",
+                              style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
                       ),
-                      Spacer(),
-                      // Top Up Action Text
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _textColor,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          "Top Up", 
-                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)
-                        ),
-                      )
+                      Icon(Icons.arrow_forward_ios, size: 14, color: _primaryOrange),
                     ],
                   ),
                 ),
               ),
 
-          SizedBox(height: 25),
+              const SizedBox(height: 16),
 
-              // 3. Stats Row (Clean White Pills)
+              // 2. DAILY COMMAND CENTER CARD
+              _buildDailyCommandCenter(reports, shop.isOwner),
+
+              const SizedBox(height: 18),
+
+              // 3. SMART BUSINESS INSIGHTS
+              _buildSmartInsightsSection(reports),
+
+              const SizedBox(height: 20),
+
+              // 4. Quick Key Metrics Pills
               Row(
                 children: [
-                  _buildStatPill("Total Items", "$totalItems", _textColor, _cardColor, Icons.widgets_outlined),
-                  const SizedBox(width: 15),
+                  _buildStatPill("Total Items", "$totalItems", _textColor, _cardColor, Icons.inventory_2_outlined),
+                  const SizedBox(width: 12),
                   _buildStatPill("Stockout", "$outOfStock", Colors.redAccent, _cardColor, Icons.warning_amber_rounded),
-                  const SizedBox(width: 15),
+                  const SizedBox(width: 12),
                   _buildStatPill("Low Stock", "${reports.lowStockItems}", _primaryOrange, _cardColor, Icons.trending_down),
                 ],
               ),
-              
-              const SizedBox(height: 30),
-              // 4. Quick Actions (Bento Grid)
-              Text("Quick Actions", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
-              SizedBox(height: 15),
-              
-              // Use IntrinsicHeight to prevent overflow errors
-              IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Big POS Button (Dark for contrast)
-                Expanded(
-                  flex: 6,
-                  child: _buildBentoAction(
-                    title: "POS Terminal",
-                    subtitle: "New Sale",
-                    icon: Icons.qr_code_scanner,
-                    bgColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF333333), 
-                    textColor: Colors.white, // White text
-                    iconColor: _primaryOrange,// Orange icon
-                    isTall: true,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => POSScreen())),
+
+              const SizedBox(height: 20),
+
+              // 5. Subscription Status & Valuation Bar
+              Row(
+                children: [
+                  // M-Bizna Pro Subscription Card
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SubscriptionScreen())),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _cardColor,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: (shop.isProActive ? Colors.green : _primaryOrange).withOpacity(0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                shop.isProActive ? Icons.verified : Icons.workspace_premium,
+                                color: shop.isProActive ? Colors.green : _primaryOrange,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Plan Status", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    shop.isProActive ? "Pro Active" : "Free Plan", 
+                                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: shop.isProActive ? Colors.green : _textColor)
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios, color: _primaryOrange, size: 14),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
+                  
+                  if (shop.isOwner) ...[
+                    const SizedBox(width: 12),
+                    // Asset Valuation
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _cardColor,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.storefront_outlined, color: Colors.blue, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Stock Value", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    shop.isProActive
+                                      ? "KES ${totalStockValue.toStringAsFixed(0)}"
+                                      : "KES ***",
+                                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: _textColor)
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ]
+                ],
+              ),
+
+              const SizedBox(height: 25),
+
+              // 6. Quick Actions (Bento Grid)
+              Text("Quick Actions", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+              const SizedBox(height: 14),
+              
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Big POS Terminal Action
+                    Expanded(
+                      flex: 6,
+                      child: _buildBentoAction(
+                        title: "POS Terminal",
+                        subtitle: "New Sale",
+                        icon: Icons.qr_code_scanner,
+                        bgColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFF1A1A1A) : const Color(0xFF2C2C2C), 
+                        textColor: Colors.white,
+                        iconColor: _primaryOrange,
+                        isTall: true,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const POSScreen())),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Stacked Shortcuts
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: _buildBentoAction(
+                              title: "Add Item",
+                              subtitle: "Catalog",
+                              icon: Icons.add_circle_outline,
+                              bgColor: _cardColor,
+                              textColor: _textColor,
+                              iconColor: _primaryOrange,
+                              isTall: false,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => AddProductScreen())),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (shop.isOwner)
+                            Expanded(
+                              child: _buildBentoAction(
+                                title: "Deni Book",
+                                subtitle: "Credit Debt",
+                                icon: Icons.people_alt_outlined,
+                                bgColor: _cardColor,
+                                textColor: _textColor,
+                                iconColor: Colors.blue, 
+                                isTall: false,
+                                onTap: () async {
+                                  bool canAccess = shop.isSecurityEnabled ? await BiometricService.authenticate() : true;
+                                  if (canAccess) Navigator.push(context, MaterialPageRoute(builder: (c) => CustomersScreen()));
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 15),
-                // Stacked Smaller Buttons
-                Expanded(
-                  flex: 4,
-                  child: Column(
+              ),
+
+              const SizedBox(height: 12),
+
+              if (shop.isOwner)
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: _buildBentoAction(
-                          title: "Add Item",
-                          subtitle: "",
-                          icon: Icons.add,
+                          title: "Expenses",
+                          subtitle: shop.isProActive ? "Record Cost" : "Pro Feature",
+                          icon: Icons.receipt_long_outlined,
+                          bgColor: _cardColor,
+                          textColor: shop.isProActive ? _textColor : Colors.grey,
+                          iconColor: shop.isProActive ? Colors.redAccent : Colors.grey,
+                          isTall: false,
+                          onTap: () {
+                            if (shop.isProActive) {
+                              Navigator.push(context, MaterialPageRoute(builder: (c) => const ExpenseScreen()));
+                            } else {
+                              _showSubscriptionRequiredDialog();
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildBentoAction(
+                          title: "Analytics",
+                          subtitle: "Reports & PDF",
+                          icon: Icons.bar_chart_outlined,
+                          bgColor: _cardColor,
+                          textColor: _textColor,
+                          iconColor: Colors.green,
+                          isTall: false,
+                          onTap: () async {
+                            bool canAccess = shop.isSecurityEnabled ? await BiometricService.authenticate() : true;
+                            if (canAccess) Navigator.push(context, MaterialPageRoute(builder: (c) => const ReportsScreen()));
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 12),
+
+              if (shop.isOwner)
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildBentoAction(
+                          title: "Suppliers",
+                          subtitle: "Restock Orders",
+                          icon: Icons.local_shipping_outlined,
+                          bgColor: _cardColor,
+                          textColor: _textColor,
+                          iconColor: Colors.teal,
+                          isTall: false,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersScreen())),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildBentoAction(
+                          title: "Close Day",
+                          subtitle: "Z-Report",
+                          icon: Icons.lock_clock_outlined,
                           bgColor: _cardColor,
                           textColor: _textColor,
                           iconColor: _primaryOrange,
                           isTall: false,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => AddProductScreen())),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloseDayScreen())),
                         ),
                       ),
-                      SizedBox(height: 15),
-                      if (shop.isOwner)
-                        Expanded(
-                          child: _buildBentoAction(
-                            title: "Deni Manager",
-                            subtitle: "Track Debt",
-                            icon: Icons.people_alt_outlined,
-                            bgColor: _cardColor,
-                            textColor: _textColor,
-                            iconColor: Colors.blue, 
-                            isTall: false,
-                            onTap: () async {
-                              bool canAccess = shop.isSecurityEnabled ? await BiometricService.authenticate() : true;
-                              if (canAccess) Navigator.push(context, MaterialPageRoute(builder: (c) => CustomersScreen()));
-                            },
-                          ),
-                        ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 15),
-          if (shop.isOwner)
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _buildBentoAction(
-                      title: "Expenses ${shop.isProActive ? '' : '🔒'}",
-                      subtitle: shop.isProActive ? "Business Cost" : "Pro Feature",
-                      icon: Icons.receipt_long_outlined,
-                      bgColor: _cardColor,
-                      textColor: shop.isProActive ? _textColor : Colors.grey,
-                      iconColor: shop.isProActive ? Colors.redAccent : Colors.grey,
-                      isTall: false,
-                      onTap: () {
-                        if (shop.isProActive) {
-                          Navigator.push(context, MaterialPageRoute(builder: (c) => const ExpenseScreen()));
-                        } else {
-                          _showSubscriptionRequiredDialog();
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _buildBentoAction(
-                      title: "Reports ${shop.isProActive ? '' : '🔒'}",
-                      subtitle: shop.isProActive ? "Sales Analytics" : "Pro Feature",
-                      icon: Icons.bar_chart_outlined,
-                      bgColor: _cardColor,
-                      textColor: shop.isProActive ? _textColor : Colors.grey,
-                      iconColor: shop.isProActive ? Colors.green : Colors.grey,
-                      isTall: false,
-                      onTap: () {
-                         if (shop.isProActive) {
-                           // Navigate to Reports if implemented separately or handle accordingly
-                         } else {
-                           _showSubscriptionRequiredDialog();
-                         }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 40),
             ],
           ),
         ),
@@ -338,86 +473,282 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  // 🎨 WIDGET: Creative Hero Card (Orange Gradient)
-  Widget _buildCreativeHeroCard(double value, Color primaryColor, bool isProActive) {
+  // WIDGET: Daily Command Center Card
+  Widget _buildDailyCommandCenter(ReportProvider reports, bool isOwner) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(25),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          // Your Theme Gradient: Orange to lighter Orange
-          colors: [primaryColor, Color(0xFFFF9E40)], 
+          colors: [
+            _primaryOrange,
+            const Color(0xFFFF8B33),
+          ],
         ),
         boxShadow: [
-          BoxShadow(color: primaryColor.withOpacity(0.4), blurRadius: 20, offset: Offset(0, 10)),
+          BoxShadow(color: _primaryOrange.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 10)),
         ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Decorative Circles
-          Positioned(
-            top: -50, right: -50,
-            child: Container(width: 150, height: 150, decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle)),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Total Asset Value", style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500)),
-                  Icon(Icons.show_chart, color: Colors.white, size: 20),
+                  const Icon(Icons.insights, color: Colors.white, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    "TODAY'S COMMAND CENTER", 
+                    style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)
+                  ),
                 ],
               ),
-              SizedBox(height: 15),
-              Text(
-                isProActive 
-                ? "KES ${value.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}"
-                : "KES ***** (Pro Only)",
-                style: GoogleFonts.poppins(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 10),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-                child: Text("Live Updates", style: GoogleFonts.poppins(color: Colors.white, fontSize: 10)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  "${reports.todayTransactionsCount} sales",
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)
+                ),
               )
             ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Text(
+            isOwner ? "Net Profit Today" : "Total Sales Today",
+            style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.85), fontSize: 13)
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isOwner
+              ? "KES ${reports.todayNetProfit.toStringAsFixed(0)}"
+              : "KES ${reports.todaySales.toStringAsFixed(0)}",
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+          ),
+          
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white24, height: 1),
+          const SizedBox(height: 14),
+
+          // Sub-metrics (Sales, Expenses, Avg Basket)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildCommandSubMetric(
+                label: "Gross Sales",
+                value: "KES ${reports.todaySales.toStringAsFixed(0)}",
+                icon: Icons.point_of_sale,
+              ),
+              _buildCommandSubMetric(
+                label: "Expenses",
+                value: "KES ${reports.todayExpenses.toStringAsFixed(0)}",
+                icon: Icons.receipt_long_outlined,
+              ),
+              _buildCommandSubMetric(
+                label: "Avg Basket",
+                value: "KES ${reports.averageBasketSize.toStringAsFixed(0)}",
+                icon: Icons.shopping_basket_outlined,
+              ),
+            ],
+          ),
+
+          if (isOwner) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: _primaryOrange,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                icon: const Icon(Icons.lock_clock, size: 16, color: Color(0xFFFF6B00)),
+                label: Text(
+                  "Close Business Day (Z-Report)",
+                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFFF6B00)),
+                ),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloseDayScreen())),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommandSubMetric({required String label, required String value, required IconData icon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: Colors.white70, size: 13),
+            const SizedBox(width: 4),
+            Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(value, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+      ],
+    );
+  }
+
+  // WIDGET: Smart Business Insights Cards
+  Widget _buildSmartInsightsSection(ReportProvider reports) {
+    final insights = <Widget>[];
+
+    // Insight 1: Top Seller
+    if (reports.topSellingProductName != null && reports.topSellingProductQty > 0) {
+      insights.add(
+        _buildInsightItem(
+          icon: Icons.star_outline,
+          iconColor: Colors.amber,
+          title: "Top Seller Today",
+          detail: "${reports.topSellingProductName} (${reports.topSellingProductQty.toStringAsFixed(0)} units sold)",
+        ),
+      );
+    }
+
+    // Insight 2: Critical Stock Alert
+    if (reports.criticalStockName != null && reports.criticalStockQty > 0) {
+      insights.add(
+        _buildInsightItem(
+          icon: Icons.warning_amber_rounded,
+          iconColor: Colors.redAccent,
+          title: "Critical Stock Alert",
+          detail: "${reports.criticalStockName} has only ${reports.criticalStockQty.toStringAsFixed(0)} units left in stock.",
+        ),
+      );
+    }
+
+    // Insight 3: Outstanding Deni
+    if (reports.totalOutstandingDebt > 0) {
+      insights.add(
+        _buildInsightItem(
+          icon: Icons.people_outline,
+          iconColor: Colors.blue,
+          title: "Deni Customer Ledger",
+          detail: "${reports.debtorCount} customers owe KES ${reports.totalOutstandingDebt.toStringAsFixed(0)} total.",
+        ),
+      );
+    }
+
+    // Insight 4: Sales Trend vs Yesterday
+    if (reports.todaySales > 0 && reports.salesGrowthPercentage != 0) {
+      final isUp = reports.salesGrowthPercentage > 0;
+      insights.add(
+        _buildInsightItem(
+          icon: isUp ? Icons.trending_up : Icons.trending_down,
+          iconColor: isUp ? Colors.green : Colors.orange,
+          title: "Sales Momentum",
+          detail: "Today's sales are ${isUp ? '+' : ''}${reports.salesGrowthPercentage.toStringAsFixed(0)}% compared to yesterday.",
+        ),
+      );
+    }
+
+    if (insights.isEmpty) {
+      insights.add(
+        _buildInsightItem(
+          icon: Icons.info_outline,
+          iconColor: _primaryOrange,
+          title: "Business Ready",
+          detail: "Record your first sale of the day to start generating real-time performance insights.",
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.lightbulb_outline, size: 18, color: _primaryOrange),
+            const SizedBox(width: 6),
+            Text("Business Insights", style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: _textColor)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...insights,
+      ],
+    );
+  }
+
+  Widget _buildInsightItem({
+    required IconData icon, 
+    required Color iconColor, 
+    required String title, 
+    required String detail
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: _textColor)),
+                Text(detail, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // 💊 WIDGET: Stat Pill
+  // WIDGET: Stat Pill
   Widget _buildStatPill(String label, String value, Color iconColor, Color bgColor, IconData icon) {
     return Expanded(
       child: Container(
-        height: 110,
-        padding: EdgeInsets.all(15),
+        height: 95,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: Offset(0, 5))],
+          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: iconColor, size: 24),
+            Icon(icon, color: iconColor, size: 20),
             const Spacer(),
-            Text(value, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: _textColor)),
-            Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+            Text(value, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+            Text(label, style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey)),
           ],
         ),
       ),
     );
   }
 
-  // 🍱 WIDGET: Bento Grid Card (Flexible)
+  // WIDGET: Bento Grid Card
   Widget _buildBentoAction({
     required String title,
     required String subtitle,
@@ -431,12 +762,12 @@ class _DashboardTabState extends State<DashboardTab> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
-            BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 15, offset: Offset(0, 5)),
+            BoxShadow(color: Colors.grey.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
@@ -445,19 +776,18 @@ class _DashboardTabState extends State<DashboardTab> {
           children: [
             Align(
               alignment: Alignment.topRight,
-              child: Icon(icon, color: iconColor, size: 28),
+              child: Icon(icon, color: iconColor, size: 26),
             ),
-            // Spacers allow content to spread in tall cards, but compact in small ones
-            if (isTall) Spacer(), 
-            if (isTall) SizedBox(height: 10),
+            if (isTall) const Spacer(), 
+            if (isTall) const SizedBox(height: 10),
             
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+                Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
                 if (subtitle.isNotEmpty)
-                  Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: textColor.withOpacity(0.6))),
+                  Text(subtitle, style: GoogleFonts.poppins(fontSize: 11, color: textColor.withOpacity(0.6))),
               ],
             )
           ],
@@ -488,3 +818,4 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 }
+

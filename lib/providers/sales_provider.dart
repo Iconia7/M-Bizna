@@ -3,10 +3,31 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 
+class HeldSale {
+  final String id;
+  final Map<String, CartItem> cart;
+  final double totalAmount;
+  final DateTime heldAt;
+  final String? note;
+
+  HeldSale({
+    required this.id,
+    required this.cart,
+    required this.totalAmount,
+    required this.heldAt,
+    this.note,
+  });
+
+  int get itemCount => cart.values.fold(0, (sum, item) => sum + item.quantity.toInt());
+}
+
 class SalesProvider with ChangeNotifier {
   final Map<String, CartItem> _cart = {};
+  final List<HeldSale> _heldSales = [];
 
   Map<String, CartItem> get cart => _cart;
+  List<HeldSale> get heldSales => [..._heldSales];
+  int get heldSalesCount => _heldSales.length;
 
   double get totalAmount {
     var total = 0.0;
@@ -16,7 +37,7 @@ class SalesProvider with ChangeNotifier {
     return total;
   }
 
-void addToCart(Product product, {double amount = 1.0}) {
+  void addToCart(Product product, {double amount = 1.0}) {
     if (_cart.containsKey(product.barcode)) {
       _cart.update(
         product.barcode,
@@ -25,7 +46,7 @@ void addToCart(Product product, {double amount = 1.0}) {
           quantity: existing.quantity + amount,
         ),
       );
-    }else {
+    } else {
       _cart.putIfAbsent(
         product.barcode,
         () => CartItem(product: product, quantity: amount),
@@ -63,7 +84,40 @@ void addToCart(Product product, {double amount = 1.0}) {
     notifyListeners();
   }
 
-  // 🚀 PROFESSIONAL UPGRADE: TRANSACTION SUPPORT
+  // --- HELD SALES (PARK & RESUME CARTS) ---
+  bool holdCurrentCart({String? note}) {
+    if (_cart.isEmpty) return false;
+
+    final held = HeldSale(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      cart: Map.from(_cart),
+      totalAmount: totalAmount,
+      heldAt: DateTime.now(),
+      note: note,
+    );
+
+    _heldSales.insert(0, held);
+    clearCart();
+    return true;
+  }
+
+  bool resumeHeldSale(String id) {
+    final index = _heldSales.indexWhere((h) => h.id == id);
+    if (index == -1) return false;
+
+    final held = _heldSales.removeAt(index);
+    _cart.clear();
+    _cart.addAll(held.cart);
+    notifyListeners();
+    return true;
+  }
+
+  void deleteHeldSale(String id) {
+    _heldSales.removeWhere((h) => h.id == id);
+    notifyListeners();
+  }
+
+  // --- TRANSACTION SUBMIT ---
   Future<void> submitOrder() async {
     final db = await DatabaseHelper.instance.database;
     final timestamp = DateTime.now().toIso8601String();
@@ -77,7 +131,7 @@ void addToCart(Product product, {double amount = 1.0}) {
         await txn.insert('sales', {
           'product_id': cartItem.product.id,
           'quantity': cartItem.quantity,
-          'total_price': cartItem.total, // Uses getter from CartItem model
+          'total_price': cartItem.total,
           'profit': profit,
           'date_time': timestamp,
           'synced': 0 
@@ -92,9 +146,77 @@ void addToCart(Product product, {double amount = 1.0}) {
           where: 'id = ?',
           whereArgs: [cartItem.product.id],
         );
+
+        // 3. Log Stock Movement Audit Trail
+        await txn.insert('stock_movements', {
+          'product_id': cartItem.product.id,
+          'change_qty': -cartItem.quantity,
+          'previous_qty': cartItem.product.stockQty,
+          'new_qty': newStock,
+          'type': 'SALE',
+          'reason': 'POS Sale Checkout',
+          'date_time': timestamp,
+        });
       }
     });
 
     clearCart();
+  }
+
+  // --- RETURN & REFUND PROCESSING ---
+  Future<bool> processReturn({
+    required int saleId,
+    required int productId,
+    required double returnQty,
+    required double refundAmount,
+    required String reason,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final timestamp = DateTime.now().toIso8601String();
+
+    try {
+      await db.transaction((txn) async {
+        // 1. Record in returns table
+        await txn.insert('returns', {
+          'sale_id': saleId,
+          'product_id': productId,
+          'quantity': returnQty,
+          'refund_amount': refundAmount,
+          'reason': reason,
+          'date_time': timestamp,
+        });
+
+        // 2. Fetch current stock and restock
+        final productRows = await txn.query('products', where: 'id = ?', whereArgs: [productId]);
+        if (productRows.isNotEmpty) {
+          final currentStock = (productRows.first['stock_qty'] as num).toDouble();
+          final newStock = currentStock + returnQty;
+
+          await txn.update(
+            'products',
+            {'stock_qty': newStock},
+            where: 'id = ?',
+            whereArgs: [productId],
+          );
+
+          // 3. Log Stock Movement Audit Trail
+          await txn.insert('stock_movements', {
+            'product_id': productId,
+            'change_qty': returnQty,
+            'previous_qty': currentStock,
+            'new_qty': newStock,
+            'type': 'ADJUSTMENT',
+            'reason': 'Customer Return: $reason',
+            'date_time': timestamp,
+          });
+        }
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error processing return: $e");
+      return false;
+    }
   }
 }

@@ -2,19 +2,19 @@ import 'dart:io';
 import 'package:duka_manager/db/database_helper.dart';
 import 'package:duka_manager/providers/auth_provider.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
-import 'package:duka_manager/providers/wallet_provider.dart';
-import 'package:duka_manager/screens/wallet_screen.dart';
+import 'package:duka_manager/screens/subscription_screen.dart';
 import 'package:duka_manager/services/printer_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // ☁️ Needed for Listener
 
+import 'package:intl/intl.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/report_provider.dart';
-import '../services/payhero_service.dart'; // 💳 Import PayHero
-import '../services/sync_service.dart';    // ☁️ Import Sync
+import '../services/payhero_service.dart';
+import '../services/sync_service.dart';
 import '../models/product.dart';
 import 'add_product_screen.dart';
 import '../widgets/simple_scanner_page.dart';
@@ -332,34 +332,9 @@ void _handleCheckout() async {
   );
 }
 
-  void _showLowBalanceDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text("Insufficient Credits"),
-        content: Text("Using M-Pesa integration costs KES 2.00 per sale.\nPlease top up your wallet."),
-        actions: [
-          TextButton(child: Text("Close"), onPressed: () => Navigator.pop(ctx)),
-          ElevatedButton(
-            child: Text("Top Up Now"),
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.push(context, MaterialPageRoute(builder: (c) => WalletScreen()));
-            },
-          )
-        ],
-      ),
-    );
-  }
-
-  // Step A: Get Phone Number
+  // Step A: Get Customer Phone Number and Trigger Direct STK Push
   void _showMpesaPhoneInput() {
     final phoneController = TextEditingController();
-    final wallet = Provider.of<WalletProvider>(context, listen: false);
-    if (!wallet.canAfford(WalletProvider.COST_MPESA_SALE)) {
-      _showLowBalanceDialog();
-      return;
-    }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -369,7 +344,7 @@ void _handleCheckout() async {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text("Enter customer phone to send STK Push", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-            SizedBox(height: 15),
+            const SizedBox(height: 15),
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
@@ -390,29 +365,29 @@ void _handleCheckout() async {
             style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             child: Text("Request Payment", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
             onPressed: () async {
-  final sales = Provider.of<SalesProvider>(context, listen: false);
-final shop = Provider.of<ShopProvider>(context, listen: false);
-  
-  Navigator.pop(ctx);
-  
-  // 🚀 Trigger STK Push with SALE prefix
-final settings = await DatabaseHelper.instance.getSettings();
+              final sales = Provider.of<SalesProvider>(context, listen: false);
+              final shop = Provider.of<ShopProvider>(context, listen: false);
+              
+              Navigator.pop(ctx);
+              
+              // Trigger Customer Sale STK Push (Zero platform deduction)
+              final settings = await DatabaseHelper.instance.getSettings();
 
-String? invoiceId = await PayHeroService().initiateSTKPush(
-  phoneNumber: phoneController.text, 
-  amount: sales.totalAmount,
-  externalReference: shop.generatePayHeroRef("SALE"),
-  basicAuth: settings['payhero_auth'],      // 🚀 From User Settings
-  channelId: settings['payhero_channel_id'], // 🚀 From User Settings
-);
+              String? invoiceId = await PayHeroService().initiateSTKPush(
+                phoneNumber: phoneController.text, 
+                amount: sales.totalAmount,
+                externalReference: shop.generatePayHeroRef("SALE"),
+                basicAuth: settings['payhero_auth'] ?? "",      
+                channelId: settings['payhero_channel_id'] ?? "", 
+              );
 
-  if (invoiceId != null) {
-    if (!mounted) return;
-    _showListeningDialog(invoiceId);
-  } else {
-    FeedbackDialog.show(context, title: "Error", message: "Connection failed.", isSuccess: false);
-  }
-},
+              if (invoiceId != null) {
+                if (!mounted) return;
+                _showListeningDialog(invoiceId);
+              } else {
+                FeedbackDialog.show(context, title: "Error", message: "Connection failed. Please check customer phone number.", isSuccess: false);
+              }
+            },
           )
         ],
       )
@@ -552,36 +527,38 @@ String? invoiceId = await PayHeroService().initiateSTKPush(
 }
 
 void _showSubscriptionRequiredDialog() {
-  final wallet = Provider.of<WalletProvider>(context, listen: false);
-  final shop = Provider.of<ShopProvider>(context, listen: false);
-
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text("Upgrade to Pro", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-      content: Text("Cloud Sync and STK Push require a KES 200/mo subscription."),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      backgroundColor: _surfaceColor,
+      title: Row(
+        children: [
+          Icon(Icons.workspace_premium, color: _primaryOrange, size: 24),
+          const SizedBox(width: 8),
+          Text("Upgrade to Pro", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+        ],
+      ),
+      content: Text(
+        "M-Pesa STK Push and Cloud Sync are available with M-Bizna Pro. Zero per-transaction fees!",
+        style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade700),
+      ),
       actions: [
-        // Option 1: Use Wallet Balance
-        if (wallet.balance >= 200) 
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final auth = Provider.of<AuthProvider>(context, listen: false);
-              bool success = await wallet.paySubscriptionWithWallet(shop.shopId);
-              if (success) {
-                await shop.loadSubscriptionStatus(auth.user?.uid); // Refresh status
-                FeedbackDialog.show(context, title: "Success", message: "Pro activated!", isSuccess: true);
-              }
-            },
-            child: Text("Pay with Balance (KES 200)"),
-          ),
-        
-        // Option 2: Use M-Pesa STK (Existing logic)
         TextButton(
-          onPressed: _paySubscription, // Your existing STK Push method
-          child: Text("Pay with M-Pesa"),
+          child: Text("Later", style: GoogleFonts.poppins(color: Colors.grey)),
+          onPressed: () => Navigator.pop(ctx),
+        ),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _primaryOrange,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: const Icon(Icons.star, color: Colors.white, size: 16),
+          label: Text("View Plans & Subscribe", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+          onPressed: () {
+            Navigator.pop(ctx);
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+          },
         ),
       ],
     ),
@@ -648,16 +625,22 @@ void _finalizeSale(String method) async {
             onPressed: () async {
               final printer = PrinterService();
               if (await printer.isConnected) {
-                await printer.printReceipt(
-                  shopName: shop.shopName,
-                  date: DateTime.now().toString().substring(0, 16),
-                  items: receiptItems,
-                  total: totalAmount,
-                );
-                Navigator.pop(ctx);
+                try {
+                  await printer.printReceipt(
+                    shopName: shop.shopName,
+                    date: DateTime.now().toString().substring(0, 16),
+                    items: receiptItems,
+                    total: totalAmount,
+                  );
+                  Navigator.pop(ctx);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Printing error: $e"), backgroundColor: Colors.red),
+                  );
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("No printer connected."))
+                  const SnackBar(content: Text("No printer connected. Configure in Printer Settings.")),
                 );
               }
             },
@@ -673,7 +656,203 @@ void _finalizeSale(String method) async {
         ],
       ),
     );
-}
+  }
+
+  void _holdSale(BuildContext context) {
+    final sales = Provider.of<SalesProvider>(context, listen: false);
+    if (sales.cart.isEmpty) return;
+
+    final noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.pause_circle_outline, color: _primaryOrange),
+            const SizedBox(width: 8),
+            Text("Hold Current Sale", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, color: _textColor)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Park this cart of ${sales.cart.length} items (KES ${sales.totalAmount.toStringAsFixed(0)}) to serve another customer?",
+              style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: noteController,
+              decoration: InputDecoration(
+                hintText: "Optional Note (e.g. Customer in red hat)",
+                hintStyle: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade400),
+                filled: true,
+                fillColor: _containerColor,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancel", style: GoogleFonts.poppins(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              final success = sales.holdCurrentCart(note: noteController.text.trim().isNotEmpty ? noteController.text.trim() : null);
+              if (success) {
+                FeedbackDialog.show(context, title: "Sale Held", message: "Cart parked. You can resume it anytime.", isSuccess: true);
+              }
+            },
+            child: const Text("Hold Cart", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHeldSalesModal(BuildContext context) {
+    final sales = Provider.of<SalesProvider>(context, listen: false);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 15),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.history_toggle_off, color: _primaryOrange),
+                    const SizedBox(width: 8),
+                    Text("Parked / Held Sales", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+                  ],
+                ),
+                Text("${sales.heldSalesCount} active", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+            const SizedBox(height: 15),
+            if (sales.heldSales.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text("No held sales at this time.", style: GoogleFonts.poppins(color: Colors.grey)),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  itemCount: sales.heldSales.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 10),
+                  itemBuilder: (c, i) {
+                    final held = sales.heldSales[i];
+                    final timeStr = DateFormat('h:mm a').format(held.heldAt);
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _cardColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _containerColor),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: _primaryOrange.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.shopping_bag_outlined, color: _primaryOrange, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "KES ${held.totalAmount.toStringAsFixed(0)}",
+                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: _textColor),
+                                ),
+                                Text(
+                                  "${held.itemCount} items • Held at $timeStr",
+                                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
+                                ),
+                                if (held.note != null && held.note!.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      held.note!,
+                                      style: GoogleFonts.poppins(fontSize: 11, color: _primaryOrange, fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () {
+                              sales.deleteHeldSale(held.id);
+                              Navigator.pop(ctx);
+                              FeedbackDialog.show(context, title: "Removed", message: "Held sale discarded.", isSuccess: true);
+                            },
+                          ),
+                          const SizedBox(width: 4),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryOrange,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              sales.resumeHeldSale(held.id);
+                              FeedbackDialog.show(context, title: "Resumed", message: "Cart restored to terminal.", isSuccess: true);
+                            },
+                            child: const Text("Resume", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // --- UI BUILD ---
 
@@ -689,11 +868,45 @@ void _finalizeSale(String method) async {
         centerTitle: false,
         title: Text("Terminal", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
         actions: [
+          // 1. Held Sales Badge Chip
+          if (sales.heldSalesCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onTap: () => _showHeldSalesModal(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _primaryOrange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _primaryOrange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.history_toggle_off, color: _primaryOrange, size: 16),
+                      const SizedBox(width: 4),
+                      Text("Held (${sales.heldSalesCount})", style: GoogleFonts.poppins(color: _primaryOrange, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // 2. Hold Current Sale Action
           if (sales.cart.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.redAccent),
+              tooltip: "Hold Sale",
+              icon: Icon(Icons.pause_circle_outline, color: _textColor),
+              onPressed: () => _holdSale(context),
+            ),
+
+          // 3. Clear Cart Action
+          if (sales.cart.isNotEmpty)
+            IconButton(
+              tooltip: "Clear Cart",
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               onPressed: () => setState(() => sales.cart.clear()),
-            )
+            ),
         ],
       ),
       body: Column(

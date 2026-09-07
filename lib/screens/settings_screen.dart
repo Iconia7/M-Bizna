@@ -1,7 +1,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:duka_manager/db/database_helper.dart';
-import 'package:duka_manager/providers/wallet_provider.dart';
+import 'package:duka_manager/screens/subscription_screen.dart';
 import 'package:duka_manager/screens/legal_screen.dart';
 import 'package:duka_manager/screens/payment_settings_screen.dart';
 import 'package:duka_manager/screens/printer_settings_screen.dart';
@@ -209,41 +209,8 @@ void _showNumberRequiredDialog() {
   }
 
   void _showSubscriptionRequiredDialog() {
-  final wallet = Provider.of<WalletProvider>(context, listen: false);
-  final shop = Provider.of<ShopProvider>(context, listen: false);
-
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text("Upgrade to Pro", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-      content: Text("Cloud Sync and STK Push require a KES 200/mo subscription."),
-      actions: [
-        // Option 1: Use Wallet Balance
-        if (wallet.balance >= 200) 
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final auth = Provider.of<AuthProvider>(context, listen: false);
-              bool success = await wallet.paySubscriptionWithWallet(shop.shopId);
-              if (success) {
-                await shop.loadSubscriptionStatus(auth.user?.uid); // Refresh status
-                FeedbackDialog.show(context, title: "Success", message: "Pro activated!", isSuccess: true);
-              }
-            },
-            child: Text("Pay with Balance (KES 200)"),
-          ),
-        
-        // Option 2: Use M-Pesa STK (Existing logic)
-        TextButton(
-          onPressed: _paySubscription, // Your existing STK Push method
-          child: Text("Pay with M-Pesa"),
-        ),
-      ],
-    ),
-  );
-}
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  }
 
 
 
@@ -422,19 +389,33 @@ Card(
                   ),
                   Divider(height: 1, color: Colors.grey.shade100),
 
-                  // 🖨️ NEW: PRINTER SETTINGS
+                  // PRINTER SETTINGS
                   ListTile(
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (c) => PrinterSettingsScreen()));
                     },
                     leading: Container(
-                      padding: EdgeInsets.all(8), 
+                      padding: const EdgeInsets.all(8), 
                       decoration: BoxDecoration(color: _primaryOrange.withOpacity(0.1), shape: BoxShape.circle), 
                       child: Icon(Icons.print, color: _primaryOrange)
                     ),
                     title: Text("Printer Settings", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
                     subtitle: Text("Connect Thermal Printer", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-                    trailing: Icon(Icons.chevron_right, color: Colors.grey),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  ),
+                  Divider(height: 1, color: Colors.grey.shade100),
+                  ListTile(
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (c) => const SubscriptionScreen()));
+                    },
+                    leading: Container(
+                      padding: const EdgeInsets.all(8), 
+                      decoration: BoxDecoration(color: (shop.isProActive ? Colors.green : _primaryOrange).withOpacity(0.1), shape: BoxShape.circle), 
+                      child: Icon(shop.isProActive ? Icons.verified : Icons.workspace_premium, color: shop.isProActive ? Colors.green : _primaryOrange)
+                    ),
+                    title: Text("Subscription & Pro Plans", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor)),
+                    subtitle: Text(shop.isProActive ? "Pro Active (${shop.daysRemaining} days left)" : "Upgrade to Pro via M-Pesa", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                   ),
                   Divider(height: 1, color: Colors.grey.shade100),
                   // Inside your SettingsScreen build method

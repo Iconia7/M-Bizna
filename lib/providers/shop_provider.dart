@@ -116,28 +116,60 @@ Future<void> toggleAutoRenew(bool value) async {
     }
   }
 
-  /// RESTORE LOGIC: Find shop by Owner UID
-  Future<String?> findShopByUid(String uid) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('shops')
-        .where('owner_uid', isEqualTo: uid)
-        .limit(1)
-        .get();
+  /// RESTORE LOGIC: Find shop by Owner Phone or Owner UID
+  Future<String?> findShopByPhoneOrUid({String? phone, required String uid}) async {
+    QuerySnapshot<Map<String, dynamic>>? snapshot;
 
-    if (snapshot.docs.isNotEmpty) {
+    // 1. Primary lookup by phone number (guarantees restore across different phones/devices)
+    if (phone != null && phone.isNotEmpty) {
+      snapshot = await FirebaseFirestore.instance
+          .collection('shops')
+          .where('owner_phone', isEqualTo: phone)
+          .limit(1)
+          .get();
+    }
+
+    // 2. Fallback lookup by owner_uid if not found by phone
+    if ((snapshot == null || snapshot.docs.isEmpty) && uid.isNotEmpty) {
+      snapshot = await FirebaseFirestore.instance
+          .collection('shops')
+          .where('owner_uid', isEqualTo: uid)
+          .limit(1)
+          .get();
+    }
+
+    if (snapshot != null && snapshot.docs.isNotEmpty) {
       final doc = snapshot.docs.first;
+      final data = doc.data();
       _shopId = doc.id;
-      _shopName = doc.data()['shop_name'] ?? "My Shop";
-      
+      _shopName = data['shop_name'] ?? "My Shop";
+      _isPro = data['is_pro'] ?? false;
+      _autoRenew = data['auto_renew'] ?? false;
+      if (data['pro_expiry'] != null) {
+        _proExpiry = (data['pro_expiry'] as Timestamp).toDate();
+      }
+      _payheroChannelId = data['payhero_channel_id'] ?? "";
+
+      // Re-link current device uid and ensure owner_phone is set
+      await doc.reference.set({
+        if (phone != null && phone.isNotEmpty) 'owner_phone': phone,
+        'owner_uid': uid,
+      }, SetOptions(merge: true));
+
       // Save locally
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('shop_id', _shopId);
       await prefs.setString('shop_name', _shopName);
-      
+
       notifyListeners();
       return _shopId;
     }
     return null;
+  }
+
+  /// Backward-compatible wrapper
+  Future<String?> findShopByUid(String uid) async {
+    return findShopByPhoneOrUid(uid: uid);
   }
 
 

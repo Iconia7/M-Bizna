@@ -1,5 +1,5 @@
 import 'package:duka_manager/providers/auth_provider.dart';
-import 'package:duka_manager/widgets/feedback_dialog.dart';
+import 'package:duka_manager/services/sms_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -110,15 +110,24 @@ class _SetupScreenState extends State<SetupScreen> {
 
   void _verifyPhone() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    String phone = _phoneController.text.trim();
-    if (!phone.startsWith("+")) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Include country code (e.g. +254)")));
+    String rawPhone = _phoneController.text.trim().replaceAll(RegExp(r'[\s\-]'), '');
+    
+    if (rawPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter your phone number.")));
+      return;
+    }
+
+    final normalized = SmsService.normalizePhone(rawPhone);
+    if (normalized == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid Kenyan mobile number (e.g. 07XXXXXXXX or 01XXXXXXXX).")),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
     await auth.verifyPhoneNumber(
-      phone,
+      normalized,
       onCodeSent: (_) => setState(() {
         _isLoading = false;
         _isOTPSent = true;
@@ -136,20 +145,27 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() => _isLoading = true);
     
     String otp = _otpControllers.map((c) => c.text).join();
+    if (otp.length < 6) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter the 6-digit OTP code.")));
+      return;
+    }
+
     bool success = await auth.signInWithOTP(otp);
     
     if (!mounted) return;
 
     if (success) {
-      String uid = auth.user!.uid;
+      String uid = auth.uid;
+      String? phone = auth.phoneNumber;
       
       setState(() {
         _statusMessage = "Identifying your account...";
         _setupProgress = 0.5;
       });
 
-      // 🕵️ Check if this UID already has a shop
-      String? existingShopId = await shopProvider.findShopByUid(uid);
+      // 🕵️ Check if this Phone or UID already has an existing shop (cross-device restore)
+      String? existingShopId = await shopProvider.findShopByPhoneOrUid(phone: phone, uid: uid);
       
       if (!mounted) return;
 
@@ -180,7 +196,9 @@ class _SetupScreenState extends State<SetupScreen> {
       }
     } else {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid OTP")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? "Invalid OTP code. Please check and try again."))
+      );
     }
   }
 
@@ -204,7 +222,7 @@ class _SetupScreenState extends State<SetupScreen> {
     try {
       await shopProvider.updateShopName(shopName);
       String shopId = shopProvider.shopId;
-      String uid = auth.user!.uid;
+      String uid = auth.uid;
 
       setState(() {
         _setupProgress = 0.4;
@@ -250,10 +268,11 @@ class _SetupScreenState extends State<SetupScreen> {
         _statusMessage = "Linking account to secure cloud...";
       });
 
-      // Cloud Initialization with UID linking
+      // Cloud Initialization with UID and Phone linking for cross-device recovery
       await FirebaseFirestore.instance.collection('shops').doc(shopId).set({
         'shop_name': shopName,
-        'owner_uid': uid, // 👈 Link to account
+        'owner_uid': uid, // 👈 Link to current session account
+        'owner_phone': auth.phoneNumber ?? '', // 👈 Link to phone for new phone restore
         'wallet_balance': 0.0,
         'mpesa_config': _mpesaMode,
         'mpesa_channel_type': _channelType,
@@ -294,6 +313,8 @@ class _SetupScreenState extends State<SetupScreen> {
     return Scaffold(
       backgroundColor: _containerColor,
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -306,61 +327,76 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
-            child: Column(
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 48),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 500),
-                  transitionBuilder: (Widget child, Animation<double> animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.1),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey<String>(
-                      _isAuthComplete 
-                          ? (_isPaymentSetup ? 'payment' : 'shop') 
-                          : (_isOTPSent ? 'otp' : 'auth')
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(28),
-                      decoration: BoxDecoration(
-                        color: _cardColor,
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 40,
-                            offset: const Offset(0, 20),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 64.0, // accounting for vertical padding
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: 36),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.1),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: KeyedSubtree(
+                            key: ValueKey<String>(
+                              _isAuthComplete 
+                                  ? (_isPaymentSetup ? 'payment' : 'shop') 
+                                  : (_isOTPSent ? 'otp' : 'auth')
+                            ),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(28),
+                              decoration: BoxDecoration(
+                                color: _cardColor,
+                                borderRadius: BorderRadius.circular(32),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 40,
+                                    offset: const Offset(0, 20),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (!_isAuthComplete) _buildAuthView()
+                                  else if (!_isPaymentSetup) _buildShopNameView() 
+                                  else _buildPaymentSetupView(),
+                                ],
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (!_isAuthComplete) _buildAuthView()
-                          else if (!_isPaymentSetup) _buildShopNameView() 
-                          else _buildPaymentSetupView(),
-                        ],
-                      ),
+                        ),
+                        const Spacer(),
+                        const SizedBox(height: 24),
+                        if (!_isLoading) _buildFooterText(),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
-                if (!_isLoading) _buildFooterText(),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -597,28 +633,28 @@ class _SetupScreenState extends State<SetupScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Automated STK Pricing", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: _textColor)),
+            Text("Automated M-Pesa STK", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: _textColor)),
             const SizedBox(height: 8),
-            Text("Fees are deducted from your M-Bizna wallet per successful sale.", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
+            Text("Automated STK push integration is included with your M-Bizna subscription with zero per-sale platform markup.", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 24),
-            _buildPriceRow("Sale Amount", "Total Fee", isHeader: true),
+            _buildPriceRow("Sale Amount", "PayHero Cost", isHeader: true),
             const Divider(),
             Expanded(
               child: ListView(
                 children: [
-                  _buildPriceRow("KES 1 - 49", "KES 2"),
-                  _buildPriceRow("KES 50 - 499", "KES 8"),
-                  _buildPriceRow("KES 500 - 999", "KES 12"),
-                  _buildPriceRow("KES 1k - 1.5k", "KES 17"),
-                  _buildPriceRow("KES 1.5k - 2.5k", "KES 22"),
-                  _buildPriceRow("KES 2.5k - 5k", "KES 27 - 32"),
-                  _buildPriceRow("Over 5k", "KES 42+"),
+                  _buildPriceRow("KES 1 - 49", "KES 0"),
+                  _buildPriceRow("KES 50 - 499", "KES 6"),
+                  _buildPriceRow("KES 500 - 999", "KES 10"),
+                  _buildPriceRow("KES 1k - 1.5k", "KES 15"),
+                  _buildPriceRow("KES 1.5k - 2.5k", "KES 20"),
+                  _buildPriceRow("KES 2.5k - 5k", "KES 25 - 30"),
+                  _buildPriceRow("Over 5k", "KES 40+"),
                 ],
               ),
             ),
             const SizedBox(height: 16),
             Center(
-              child: Text("*Includes PayHero cost + KES 2 service fee", style: GoogleFonts.poppins(fontSize: 11, fontStyle: FontStyle.italic)),
+              child: Text("*Standard PayHero gateway fees. Zero extra M-Bizna markup.", style: GoogleFonts.poppins(fontSize: 11, fontStyle: FontStyle.italic)),
             )
           ],
         ),
