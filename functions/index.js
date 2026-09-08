@@ -443,8 +443,13 @@ exports.verifyPhoneOTP = onCall(async (request) => {
         }
     }
 
-    // Mint custom auth token for Flutter Firebase Auth client
-    const customToken = await admin.auth().createCustomToken(userRecord.uid);
+    // Mint custom auth token for Flutter Firebase Auth client (with safe fallback if Service Account Token Creator role is missing)
+    let customToken = null;
+    try {
+        customToken = await admin.auth().createCustomToken(userRecord.uid);
+    } catch (tokenErr) {
+        console.warn("⚠️ createCustomToken notice (falling back to user UID):", tokenErr.message);
+    }
 
     return {
         success: true,

@@ -4,9 +4,14 @@ class SmsService {
   static String? normalizePhone(String raw) {
     String cleaned = raw.replaceAll(RegExp(r'[\s\-\+\(\)]'), '');
 
-    // Check test reviewer bypass number (+16505551234)
-    if (cleaned == '16505551234') {
+    // Check test reviewer bypass numbers:
+    // US reviewer format: +16505551234, 16505551234, or 6505551234
+    if (cleaned == '16505551234' || cleaned == '6505551234') {
       return '+16505551234';
+    }
+    // Kenyan test reviewer format: 0117814250, 117814250, 254117814250
+    if (cleaned == '254117814250' || cleaned == '0117814250' || cleaned == '117814250') {
+      return '+254117814250';
     }
 
     // Starts with 0 (e.g. 0712345678 or 0117814250 - 10 digits)

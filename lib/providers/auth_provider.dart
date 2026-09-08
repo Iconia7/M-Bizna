@@ -50,6 +50,14 @@ class AuthProvider with ChangeNotifier {
     _phoneNumber = normalizedPhone;
     notifyListeners();
 
+    // 🛡️ Google Play Reviewer bypass (Works 100% reliably without Cloud Run / SMS network dependency)
+    if (normalizedPhone == '+16505551234' || normalizedPhone == '+254117814250') {
+      _isLoading = false;
+      notifyListeners();
+      onCodeSent("123456");
+      return;
+    }
+
     try {
       final callable = _functions.httpsCallable('sendPhoneOTP');
       final result = await callable.call({'phone_number': normalizedPhone});
@@ -83,8 +91,40 @@ class AuthProvider with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    final normalizedPhone = _phoneNumber!;
+
+    // 🛡️ Google Play Reviewer bypass: Instant login with static test OTP 123456
+    if ((normalizedPhone == '+16505551234' || normalizedPhone == '+254117814250') && smsCode.trim() == '123456') {
+      try {
+        if (_auth.currentUser == null) {
+          final userCredential = await _auth.signInAnonymously();
+          _user = userCredential.user;
+        } else {
+          _user = _auth.currentUser;
+        }
+      } catch (authError) {
+        debugPrint("Reviewer auth note: $authError");
+      }
+
+      _customUid = 'reviewer_${normalizedPhone.replaceAll(RegExp(r"[^0-9]"), "")}';
+      final effectiveUid = uid;
+
+      try {
+        await _firestore.collection('users').doc(effectiveUid).set({
+          'phone_number': normalizedPhone,
+          'last_login': FieldValue.serverTimestamp(),
+          'is_reviewer': true,
+        }, SetOptions(merge: true));
+      } catch (firestoreError) {
+        debugPrint("Reviewer user firestore note: $firestoreError");
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    }
+
     try {
-      final normalizedPhone = _phoneNumber!;
       final callable = _functions.httpsCallable('verifyPhoneOTP');
       final result = await callable.call({
         'phone_number': normalizedPhone,

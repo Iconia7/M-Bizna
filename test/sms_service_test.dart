@@ -31,6 +31,11 @@ void main() {
 
     test('Play Store Reviewer Test Bypass', () {
       expect(SmsService.normalizePhone('+16505551234'), '+16505551234');
+      expect(SmsService.normalizePhone('16505551234'), '+16505551234');
+      expect(SmsService.normalizePhone('6505551234'), '+16505551234');
+      expect(SmsService.normalizePhone('(650) 555-1234'), '+16505551234');
+      expect(SmsService.normalizePhone('0117814250'), '+254117814250');
+      expect(SmsService.normalizePhone('+254117814250'), '+254117814250');
     });
   });
 }
