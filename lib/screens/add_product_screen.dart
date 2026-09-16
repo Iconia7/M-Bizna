@@ -15,10 +15,10 @@ class AddProductScreen extends StatefulWidget {
   final String? initialBarcode;
   final Product? productToEdit;
 
-  AddProductScreen({this.initialBarcode, this.productToEdit});
+  const AddProductScreen({super.key, this.initialBarcode, this.productToEdit});
 
   @override
-  _AddProductScreenState createState() => _AddProductScreenState();
+  State<AddProductScreen> createState() => _AddProductScreenState();
 }
 
 class _AddProductScreenState extends State<AddProductScreen> {
@@ -34,8 +34,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   // 🎨 THEME COLORS (Dynamic Getters)
   Color get _primaryOrange => const Color(0xFFFF6B00);
-  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
-  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F8) : Colors.white.withOpacity(0.05);
+  Color get _containerColor => Theme.of(context).brightness == Brightness.light ? const Color(0xFFF5F6F8) : const Color(0xFF121212);
   Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
   Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
@@ -92,8 +91,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _showImageSourceOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      backgroundColor: _cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -102,8 +103,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             Text("Select Image Source",
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold, fontSize: 16, color: _textColor)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -133,13 +144,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: _primaryOrange.withOpacity(0.1),
+              color: _primaryOrange.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: _primaryOrange, size: 30),
           ),
           const SizedBox(height: 8),
-          Text(label, style: GoogleFonts.poppins(fontSize: 14)),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 14, color: _textColor, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -223,15 +236,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _cardColor,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(
+                                    alpha: Theme.of(context).brightness == Brightness.dark ? 0.25 : 0.05),
                                 blurRadius: 10,
-                                offset: Offset(0, 5))
+                                offset: const Offset(0, 5))
                           ],
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.grey.shade200),
                           image: _selectedImage != null
                               ? DecorationImage(
                                   image: FileImage(_selectedImage!), fit: BoxFit.cover)
@@ -242,10 +259,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               children: [
                                 Icon(Icons.camera_alt_outlined,
                                     color: _primaryOrange, size: 30),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Text("Add Photo",
                                     style: GoogleFonts.poppins(
-                                        fontSize: 12, color: Colors.grey)),
+                                        fontSize: 12,
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.white54
+                                            : Colors.grey)),
                               ],
                             )
                           : null),
@@ -282,27 +302,47 @@ class _AddProductScreenState extends State<AddProductScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _cardColor,
                   borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.grey.shade200,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.grey.withOpacity(0.03),
+                        color: Colors.black.withValues(
+                            alpha: Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.03),
                         blurRadius: 10,
                         offset: const Offset(0, 4))
                   ],
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedUnit,
+                    initialValue: _selectedUnit,
+                    dropdownColor: _cardColor,
+                    style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.w500),
+                    icon: Icon(Icons.arrow_drop_down,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white54
+                            : Colors.grey),
                     decoration: InputDecoration(
                       labelText: "Unit of Measure",
-                      labelStyle: GoogleFonts.poppins(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.straighten, color: Colors.grey),
+                      labelStyle: GoogleFonts.poppins(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white38
+                              : Colors.grey),
+                      prefixIcon: Icon(Icons.straighten,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white38
+                              : Colors.grey),
                       border: InputBorder.none,
                     ),
                     items: _units.map((String unit) {
                       return DropdownMenuItem(
-                          value: unit, child: Text(unit, style: GoogleFonts.poppins()));
+                          value: unit,
+                          child: Text(unit,
+                              style: GoogleFonts.poppins(color: _textColor)));
                     }).toList(),
                     onChanged: (val) => setState(() => _selectedUnit = val!),
                   ),
@@ -334,11 +374,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _textColor,
+                    backgroundColor: _primaryOrange,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    elevation: 5,
-                    shadowColor: _textColor.withOpacity(0.3),
+                    elevation: 3,
+                    shadowColor: _primaryOrange.withValues(alpha: 0.4),
                   ),
                   onPressed: _saveProduct,
                   child: Text(
@@ -355,7 +396,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // 🚀 FIXED: Helper function now accepts a Widget? for the suffix
+  // 🚀 Helper function for modern styled text fields
   Widget _buildModernField(
     TextEditingController controller,
     String label, {
@@ -364,13 +405,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
     Widget? suffixWidget, // Changed from IconData to Widget
     bool readOnly = false,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: readOnly ? Colors.grey.shade200 : Colors.white,
+        color: readOnly
+            ? (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade100)
+            : _cardColor,
         borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
-              color: Colors.grey.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
         ],
       ),
       child: TextFormField(
@@ -379,12 +428,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
         keyboardType: isNumber
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor),
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.w500,
+          color: readOnly ? (isDark ? Colors.white54 : Colors.grey.shade600) : _textColor,
+        ),
         validator: (val) => val!.isEmpty ? 'Required' : null,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.poppins(color: Colors.grey),
-          prefixIcon: icon != null ? Icon(icon, color: Colors.grey.shade400) : null,
+          labelStyle: GoogleFonts.poppins(
+            color: isDark ? Colors.white38 : Colors.grey,
+          ),
+          prefixIcon: icon != null
+              ? Icon(icon, color: isDark ? Colors.white38 : Colors.grey.shade400)
+              : null,
           suffixIcon: suffixWidget, // Now handles our Row widget
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),

@@ -93,110 +93,114 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'M-Bizna',
-      theme: ThemeData(
-        scaffoldBackgroundColor: backgroundWhite,
-        primaryColor: primaryOrange,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryOrange,
-          primary: primaryOrange,
-          secondary: primaryOrange,
-          surface: backgroundWhite, // Updated for Material 3
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme).apply(
-          bodyColor: textDark,
-          displayColor: textDark,
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: backgroundWhite,
-          elevation: 0,
-          centerTitle: false,
-          titleTextStyle: GoogleFonts.poppins(
-            color: textDark,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+    return Consumer<ShopProvider>(
+      builder: (context, shop, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'M-Bizna',
+          theme: ThemeData(
+            scaffoldBackgroundColor: backgroundWhite,
+            primaryColor: primaryOrange,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: primaryOrange,
+              primary: primaryOrange,
+              secondary: primaryOrange,
+              surface: backgroundWhite, // Updated for Material 3
+            ),
+            textTheme: GoogleFonts.poppinsTextTheme().apply(
+              bodyColor: textDark,
+              displayColor: textDark,
+            ),
+            appBarTheme: AppBarTheme(
+              backgroundColor: backgroundWhite,
+              elevation: 0,
+              centerTitle: false,
+              titleTextStyle: GoogleFonts.poppins(
+                color: textDark,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+              iconTheme: const IconThemeData(color: textDark),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryOrange,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                textStyle: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: Colors.grey.withOpacity(0.1), // 👈 Theme-relative
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
+              prefixIconColor: primaryOrange,
+            ),
+            cardTheme: CardThemeData(
+              color: backgroundWhite,
+              elevation: 2,
+              shadowColor: Colors.black12,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            useMaterial3: true,
           ),
-          iconTheme: const IconThemeData(color: textDark),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryOrange,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-            textStyle: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xFF121212),
+            primaryColor: primaryOrange,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: primaryOrange,
+              brightness: Brightness.dark,
+              primary: primaryOrange,
+              surface: const Color(0xFF1E1E1E),
+            ),
+            textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
+              bodyColor: Colors.white,
+              displayColor: Colors.white,
+            ),
+            appBarTheme: AppBarTheme(
+              backgroundColor: const Color(0xFF121212),
+              elevation: 0,
+              titleTextStyle: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+              iconTheme: const IconThemeData(color: Colors.white),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.05), // 👈 Subtle dark fill
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              hintStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
+              prefixIconColor: primaryOrange,
+            ),
+            cardTheme: CardThemeData(
+              color: const Color(0xFF1E1E1E),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            useMaterial3: true,
           ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.grey.withOpacity(0.1), // 👈 Theme-relative
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
-          prefixIconColor: primaryOrange,
-        ),
-        cardTheme: CardThemeData(
-          color: backgroundWhite,
-          elevation: 2,
-          shadowColor: Colors.black12,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        useMaterial3: true,
-      ),
-        darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        primaryColor: primaryOrange,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryOrange,
-          brightness: Brightness.dark,
-          primary: primaryOrange,
-          surface: const Color(0xFF1E1E1E),
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF121212),
-          elevation: 0,
-          titleTextStyle: GoogleFonts.poppins(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.05), // 👈 Subtle dark fill
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          hintStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
-          prefixIconColor: primaryOrange,
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1E1E1E),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system, // Auto-switch based on system settings
-      navigatorObservers: [
-        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
-      ],
-      // Use the isFirstRun variable to decide initial screen
-      home: isFirstRun ? SetupScreen() :  HomeScreen(),
+          themeMode: shop.themeMode, // Auto-switch based on user preference or system settings
+          navigatorObservers: [
+            FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+          ],
+          // Use the isFirstRun variable to decide initial screen
+          home: isFirstRun ? SetupScreen() : HomeScreen(),
+        );
+      },
     );
   }
 }

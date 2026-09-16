@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ShopProvider with ChangeNotifier {
   String _shopName = "My Shop";
   String _shopId = ""; 
+  ThemeMode _themeMode = ThemeMode.system;
   bool _isDarkMode = false;
   bool _enableSound = true;
+  bool _enableNotifications = true;
   DateTime? _proExpiry;
   bool _autoRenew = false;
   String? _ownerUid;
@@ -30,8 +32,14 @@ class ShopProvider with ChangeNotifier {
   String get shopName => _shopName;
   String get shopId => _shopId;
   String get payheroChannelId => _payheroChannelId; // 👈 NEW
-  bool get isDarkMode => _isDarkMode;
+  ThemeMode get themeMode => _themeMode;
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.dark) return true;
+    if (_themeMode == ThemeMode.light) return false;
+    return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+  }
   bool get enableSound => _enableSound;
+  bool get enableNotifications => _enableNotifications;
 
   ShopProvider() {
     _loadSettings();
@@ -192,8 +200,26 @@ Future<void> toggleAutoRenew(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     _shopName = prefs.getString('shop_name') ?? "My Shop";
     _userRole = prefs.getString('user_role') ?? 'Owner';
-    _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+
+    final themeString = prefs.getString('theme_mode');
+    if (themeString == 'dark') {
+      _themeMode = ThemeMode.dark;
+      _isDarkMode = true;
+    } else if (themeString == 'light') {
+      _themeMode = ThemeMode.light;
+      _isDarkMode = false;
+    } else if (prefs.containsKey('is_dark_mode')) {
+      final legacyDark = prefs.getBool('is_dark_mode') ?? false;
+      _themeMode = legacyDark ? ThemeMode.dark : ThemeMode.light;
+      _isDarkMode = legacyDark;
+    } else {
+      _themeMode = ThemeMode.system;
+      _isDarkMode = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    }
+
     _enableSound = prefs.getBool('enable_sound') ?? true;
+    _enableNotifications = prefs.getBool('enable_notifications') ?? true;
+    _isSecurityEnabled = prefs.getBool('security_enabled') ?? true;
 
     // 🧠 UNIQUE ID LOGIC
     _shopId = prefs.getString('shop_id') ?? "";
@@ -212,17 +238,37 @@ Future<void> toggleAutoRenew(bool value) async {
     notifyListeners();
   }
 
-  Future<void> toggleDarkMode(bool value) async {
-    _isDarkMode = value;
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    _isDarkMode = mode == ThemeMode.dark ||
+        (mode == ThemeMode.system &&
+            WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_dark_mode', value);
+    String modeString = 'system';
+    if (mode == ThemeMode.dark) modeString = 'dark';
+    if (mode == ThemeMode.light) modeString = 'light';
+
+    await prefs.setString('theme_mode', modeString);
+    await prefs.setBool('is_dark_mode', _isDarkMode);
     notifyListeners();
+  }
+
+  Future<void> toggleDarkMode(bool value) async {
+    await setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
   }
 
   Future<void> toggleSound(bool value) async {
     _enableSound = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('enable_sound', value);
+    notifyListeners();
+  }
+
+  Future<void> toggleNotifications(bool value) async {
+    _enableNotifications = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('enable_notifications', value);
     notifyListeners();
   }
 }

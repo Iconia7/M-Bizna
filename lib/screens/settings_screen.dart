@@ -14,7 +14,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../providers/shop_provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/report_provider.dart';
@@ -22,6 +21,8 @@ import '../widgets/feedback_dialog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/biometric_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -328,10 +329,35 @@ void _showNumberRequiredDialog() {
               decoration: _cardDecoration(),
               child: Column(
                 children: [
+                  // Theme Mode Selector
+                  ListTile(
+                    leading: Icon(
+                      shop.themeMode == ThemeMode.system
+                          ? Icons.brightness_auto
+                          : (shop.isDarkMode ? Icons.dark_mode : Icons.light_mode),
+                      color: _primaryOrange,
+                    ),
+                    title: Text(
+                      "App Theme",
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15, color: _textColor),
+                    ),
+                    subtitle: Text(
+                      shop.themeMode == ThemeMode.system
+                          ? "System Default (${shop.isDarkMode ? 'Dark' : 'Light'})"
+                          : (shop.isDarkMode ? "Dark Theme" : "Light Theme"),
+                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                    onTap: () => _showThemeDialog(context, shop),
+                  ),
+                  Divider(height: 1, color: Colors.grey.shade100),
+
                   // Dark Mode Switch
                   _buildSwitchTile(
                     "Dark Mode", 
-                    "Use dark theme", 
+                    shop.themeMode == ThemeMode.system
+                        ? "System default (switch to override)"
+                        : (shop.isDarkMode ? "Dark theme active" : "Light theme active"), 
                     shop.isDarkMode, 
                     (val) => shop.toggleDarkMode(val)
                   ),
@@ -386,6 +412,25 @@ Card(
                     "Play sound on scan", 
                     shop.enableSound, 
                     (val) => shop.toggleSound(val)
+                  ),
+                  Divider(height: 1, color: Colors.grey.shade100),
+
+                  // Local Notifications Switch
+                  _buildSwitchTile(
+                    "Local Notifications", 
+                    "Low stock warnings & customer debt limit alerts", 
+                    shop.enableNotifications, 
+                    (val) async {
+                      if (val) {
+                        final allowed = await NotificationService.requestPermission();
+                        if (!allowed && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Please grant notification permission in your phone settings.")),
+                          );
+                        }
+                      }
+                      shop.toggleNotifications(val);
+                    }
                   ),
                   Divider(height: 1, color: Colors.grey.shade100),
 
@@ -563,21 +608,89 @@ ListTile(
 
             SizedBox(height: 25),
             
+            // SECTION: HELP & SUPPORT
+            _buildSectionTitle("Help & Support"),
+            Container(
+              decoration: _cardDecoration(),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366), size: 20),
+                    ),
+                    title: Text("WhatsApp Support", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
+                    subtitle: Text("Chat directly on 0115 332 870", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                    onTap: () => _launchWhatsAppSupport(shop),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _primaryOrange.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.mail_outline_rounded, color: _primaryOrange, size: 20),
+                    ),
+                    title: Text("Email Support", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
+                    subtitle: Text("info@nexoracreatives.co.ke", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                    onTap: () => _launchEmailSupport(shop),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.notifications_active_outlined, color: Colors.blue, size: 20),
+                    ),
+                    title: Text("Test Notifications", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
+                    subtitle: Text("Send test alert via Awesome Notifications", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.play_arrow_rounded, color: Colors.blue),
+                    onTap: () async {
+                      final sent = await NotificationService.showTestNotification();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(sent 
+                              ? "Test notification triggered! Check your status bar." 
+                              : "Please enable notification permissions in device settings."),
+                            backgroundColor: sent ? Colors.green : Colors.orange,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
             _buildSectionTitle("About"),
             Container(
               decoration: _cardDecoration(),
               child: Column(
                 children: [
                   ListTile(
-                    title: Text("Terms of Service", style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-                    trailing: Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => LegalScreen(type: 'Terms'))),
+                    title: Text("Terms of Service", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const LegalScreen(type: 'Terms'))),
                   ),
-                  Divider(height: 1),
+                  const Divider(height: 1),
                   ListTile(
-                    title: Text("Privacy Policy", style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-                    trailing: Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => LegalScreen(type: 'Privacy'))),
+                    title: Text("Privacy Policy", style: GoogleFonts.poppins(fontWeight: FontWeight.w500, color: _textColor)),
+                    trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const LegalScreen(type: 'Privacy'))),
                   ),
                   Divider(height: 1),
                   ListTile(
@@ -668,5 +781,113 @@ Container(
       value: value,
       onChanged: onChanged,
     );
+  }
+
+  void _showThemeDialog(BuildContext context, ShopProvider shop) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          "Select Theme",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<ThemeMode>(
+              activeColor: _primaryOrange,
+              title: Text("System Default", style: GoogleFonts.poppins(fontSize: 14, color: _textColor)),
+              subtitle: Text("Follow device settings", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+              value: ThemeMode.system,
+              groupValue: shop.themeMode,
+              onChanged: (mode) {
+                if (mode != null) shop.setThemeMode(mode);
+                Navigator.pop(ctx);
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              activeColor: _primaryOrange,
+              title: Text("Light Mode", style: GoogleFonts.poppins(fontSize: 14, color: _textColor)),
+              subtitle: Text("Always use light theme", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+              value: ThemeMode.light,
+              groupValue: shop.themeMode,
+              onChanged: (mode) {
+                if (mode != null) shop.setThemeMode(mode);
+                Navigator.pop(ctx);
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              activeColor: _primaryOrange,
+              title: Text("Dark Mode", style: GoogleFonts.poppins(fontSize: 14, color: _textColor)),
+              subtitle: Text("Always use dark theme", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+              value: ThemeMode.dark,
+              groupValue: shop.themeMode,
+              onChanged: (mode) {
+                if (mode != null) shop.setThemeMode(mode);
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchWhatsAppSupport(ShopProvider shop) async {
+    final message = "Hello M-Bizna Support, I need assistance with my store.\n\nShop Name: ${shop.shopName}\nShop ID: ${shop.shopId}\nApp Version: $_appVersion";
+    final uri = Uri.parse("https://wa.me/254115332870?text=${Uri.encodeComponent(message)}");
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback to phone dialer
+        final telUri = Uri.parse("tel:+254115332870");
+        if (await canLaunchUrl(telUri)) {
+          await launchUrl(telUri, mode: LaunchMode.externalApplication);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Could not open WhatsApp. Please reach out via +254 115 332 870")),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not open WhatsApp: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchEmailSupport(ShopProvider shop) async {
+    final subject = "M-Bizna Support Request - ${shop.shopName} (${shop.shopId})";
+    final body = "Hello M-Bizna Support Team,\n\nI need assistance with:\n\n[Please describe your issue or question here]\n\n---\nDiagnostic Info:\nShop Name: ${shop.shopName}\nShop ID: ${shop.shopId}\nPro Active: ${shop.isProActive}\nRole: ${shop.userRole}\nApp Version: $_appVersion";
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'info@nexoracreatives.co.ke',
+      queryParameters: {
+        'subject': subject,
+        'body': body,
+      },
+    );
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Could not open email client. Please write to info@nexoracreatives.co.ke")),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Email error: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }

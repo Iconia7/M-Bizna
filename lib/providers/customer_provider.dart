@@ -2,6 +2,7 @@ import 'package:duka_manager/db/database_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/notification_service.dart';
 import '../models/customer.dart';
 import '../models/customer_ledger_entry.dart';
 
@@ -58,6 +59,16 @@ class CustomerProvider with ChangeNotifier {
     });
 
     await loadCustomers();
+
+    // 🔔 Notify merchant if customer debt reaches 80% or more of credit limit
+    if (customer.creditLimit > 0 && newDebt >= (customer.creditLimit * 0.8)) {
+      await NotificationService.showDebtAlert(
+        customerName: customer.name,
+        currentDebt: newDebt,
+        creditLimit: customer.creditLimit,
+      );
+    }
+
     return true;
   }
 

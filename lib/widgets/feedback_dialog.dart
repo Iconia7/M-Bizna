@@ -7,12 +7,20 @@ class FeedbackDialog {
     required String message,
     bool isSuccess = true,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    final messageColor = isDark ? Colors.white70 : Colors.grey.shade600;
+    final iconBgColor = isSuccess
+        ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50)
+        : (isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.shade50);
+
     showDialog(
       context: context,
       barrierDismissible: false, // User must tap button to close
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
+        backgroundColor: dialogBg,
         elevation: 10,
         child: Padding(
           padding: const EdgeInsets.all(25),
@@ -21,9 +29,9 @@ class FeedbackDialog {
             children: [
               // 1. The Icon Circle
               Container(
-                padding: EdgeInsets.all(15),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
+                  color: iconBgColor,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -32,7 +40,7 @@ class FeedbackDialog {
                   size: 40,
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               
               // 2. Title
               Text(
@@ -41,10 +49,10 @@ class FeedbackDialog {
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: titleColor,
                 ),
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               
               // 3. Message
               Text(
@@ -52,10 +60,10 @@ class FeedbackDialog {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: Colors.grey.shade600,
+                  color: messageColor,
                 ),
               ),
-              SizedBox(height: 25),
+              const SizedBox(height: 25),
               
               // 4. Action Button
               SizedBox(
@@ -67,7 +75,7 @@ class FeedbackDialog {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    padding: EdgeInsets.symmetric(vertical: 15),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
                   onPressed: () => Navigator.pop(ctx),
                   child: Text(
