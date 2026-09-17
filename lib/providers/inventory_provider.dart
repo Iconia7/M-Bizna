@@ -43,15 +43,17 @@ class InventoryProvider with ChangeNotifier {
   }
 
   // 2. ADD / RESTOCK: Insert into SQLite & Log Movement
-  Future<void> addProduct(Product product, {bool isPro = false}) async {
+  Future<int> addProduct(Product product, {bool isPro = false}) async {
     final db = await DatabaseHelper.instance.database;
     final now = DateTime.now().toIso8601String();
+    int assignedId = 0;
     
     // Check if barcode exists first to prevent duplicates (Upsert logic)
     final existing = await db.query('products', where: 'barcode = ?', whereArgs: [product.barcode]);
     
     if (existing.isNotEmpty) {
       final existingProduct = Product.fromMap(existing.first);
+      assignedId = existingProduct.id!;
       final prevStock = existingProduct.stockQty;
       final newStock = prevStock + product.stockQty;
       
@@ -75,6 +77,7 @@ class InventoryProvider with ChangeNotifier {
     } else {
       // Insert new product
       final newId = await db.insert('products', product.toMap());
+      assignedId = newId;
       
       // Log Initial Stock Movement
       await db.insert('stock_movements', {
@@ -89,6 +92,7 @@ class InventoryProvider with ChangeNotifier {
     }
 
     await loadProducts(isPro: true);
+    return assignedId;
   }
 
   // 3. SEARCH: Find single item by barcode

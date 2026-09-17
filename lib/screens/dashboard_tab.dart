@@ -1,7 +1,6 @@
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:duka_manager/screens/customers_screen.dart';
 import 'package:duka_manager/screens/expense_screen.dart';
-import 'package:duka_manager/screens/wallet_screen.dart';
 import 'package:duka_manager/services/biometric_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -62,7 +61,6 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final reports = Provider.of<ReportProvider>(context);
     final inventory = Provider.of<InventoryProvider>(context);
-    final wallet = Provider.of<WalletProvider>(context);
     final shop = Provider.of<ShopProvider>(context);
 
     // Live Calculations
@@ -802,7 +800,7 @@ class _DashboardTabState extends State<DashboardTab> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text("Upgrade to Pro", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Text("Cloud Sync, Advanced Reports, and Expense Tracking require a KES 200/mo subscription."),
+        content: Text("Cloud Sync, Advanced Reports, and Expense Tracking require a KES 250/mo subscription."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Maybe Later")),
           ElevatedButton(

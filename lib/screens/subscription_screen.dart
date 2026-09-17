@@ -5,7 +5,6 @@ import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:duka_manager/services/payhero_service.dart';
 import 'package:duka_manager/widgets/feedback_dialog.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -42,14 +41,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       id: '1_month',
       title: "1 Month Pro",
       duration: "30 Days",
-      amount: 200.0,
+      amount: 250.0,
       savings: "Standard Monthly Plan",
     ),
     SubscriptionPlan(
       id: '3_months',
       title: "3 Months Pro",
       duration: "90 Days",
-      amount: 550.0,
+      amount: 700.0,
       badge: "POPULAR",
       savings: "Save KES 50",
     ),
@@ -57,9 +56,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       id: '1_year',
       title: "1 Year Pro",
       duration: "365 Days",
-      amount: 2000.0,
+      amount: 2500.0,
       badge: "BEST VALUE",
-      savings: "2 Months Free (Save KES 400)",
+      savings: "2 Months Free (Save KES 500)",
     ),
   ];
 
@@ -95,36 +94,36 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    // Save phone for future convenience
-    await DatabaseHelper.instance.updateSettings({'mpesa_number': phone});
+    try {
+      // Save phone for future convenience
+      await DatabaseHelper.instance.updateSettings({'mpesa_number': phone});
+      if (!mounted) return;
 
-    final shop = Provider.of<ShopProvider>(context, listen: false);
+      final shop = Provider.of<ShopProvider>(context, listen: false);
 
-    setState(() => _isLoading = true);
+      setState(() => _isLoading = true);
 
-    final basicAuth = (dotenv.env['PAYHERO_BASIC_AUTH']?.isNotEmpty == true)
-        ? dotenv.env['PAYHERO_BASIC_AUTH']!
-        : "S0dxNGcxSnZhaU1qUGFPVkFBMHo6OXUwMmpnYUkzUkhMQTJtUXhMVTg2aTg2OUd3RHo4eFNGM0JFMFJSYg==";
-    final channelId = (dotenv.env['PAYHERO_CHANNEL_ID']?.isNotEmpty == true)
-        ? dotenv.env['PAYHERO_CHANNEL_ID']!
-        : "3145";
+      final extRef = shop.generatePayHeroRef("SUB");
 
-    final extRef = shop.generatePayHeroRef("SUB");
+      final invoiceId = await PayHeroService().initiateSTKPush(
+        phoneNumber: phone,
+        amount: _selectedPlan.amount,
+        externalReference: extRef,
+      );
 
-    final invoiceId = await PayHeroService().initiateSTKPush(
-      phoneNumber: phone,
-      amount: _selectedPlan.amount,
-      externalReference: extRef,
-      basicAuth: basicAuth,
-      channelId: channelId,
-    );
+      if (mounted) setState(() => _isLoading = false);
 
-    setState(() => _isLoading = false);
-
-    if (invoiceId != null && mounted) {
-      _showListeningDialog(invoiceId);
-    } else {
-      FeedbackDialog.show(context, title: "Payment Failed", message: "Could not initiate M-Pesa STK push. Please ensure your phone is active and try again.", isSuccess: false);
+      if (invoiceId != null && mounted) {
+        _showListeningDialog(invoiceId);
+      } else if (mounted) {
+        FeedbackDialog.show(context, title: "Payment Failed", message: "Could not initiate M-Pesa STK push. Please ensure your phone is active and try again.", isSuccess: false);
+      }
+    } catch (e) {
+      debugPrint("Subscription payment error: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+        FeedbackDialog.show(context, title: "Payment Error", message: "An unexpected error occurred. Please check your network and try again.", isSuccess: false);
+      }
     }
   }
 
@@ -140,9 +139,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           stream: FirebaseFirestore.instance.collection('payment_requests').doc(invoiceId).snapshots(),
           builder: (context, snapshot) {
             String status = "PENDING";
-            if (snapshot.hasData && snapshot.data!.exists) {
-              final data = snapshot.data!.data() as Map<String, dynamic>;
-              status = data['status'] ?? "PENDING";
+            if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>?;
+              status = data?['status'] ?? "PENDING";
             }
 
             // PAYMENT CONFIRMED

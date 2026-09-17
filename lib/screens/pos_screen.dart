@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:duka_manager/db/database_helper.dart';
-import 'package:duka_manager/providers/auth_provider.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:duka_manager/screens/subscription_screen.dart';
 import 'package:duka_manager/services/printer_service.dart';
@@ -250,8 +249,8 @@ Future<void> _paySubscription() async {
   // Close the requirement dialog first
   Navigator.pop(context);
 
-  // We use a fixed amount of 200 for the monthly subscription
-  const double subAmount = 200.0;
+  // We use a fixed amount of 250 for the monthly subscription
+  const double subAmount = 250.0;
   String? mpesaNumber = settings['mpesa_number'];
 
   // 2. 🚨 CRITICAL FIX: If settings are empty, ask for the number!
@@ -373,12 +372,16 @@ void _handleCheckout() async {
               // Trigger Customer Sale STK Push (Zero platform deduction)
               final settings = await DatabaseHelper.instance.getSettings();
 
+              final effectiveChannel = (settings['payhero_channel_id'] != null && settings['payhero_channel_id'].toString().trim().isNotEmpty)
+                  ? settings['payhero_channel_id'].toString().trim()
+                  : (shop.payheroChannelId.isNotEmpty ? shop.payheroChannelId : null);
+
               String? invoiceId = await PayHeroService().initiateSTKPush(
                 phoneNumber: phoneController.text, 
                 amount: sales.totalAmount,
                 externalReference: shop.generatePayHeroRef("SALE"),
                 basicAuth: settings['payhero_auth'] ?? "",      
-                channelId: settings['payhero_channel_id'] ?? "", 
+                channelId: effectiveChannel, 
               );
 
               if (invoiceId != null) {

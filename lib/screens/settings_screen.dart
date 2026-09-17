@@ -12,7 +12,6 @@ import 'package:duka_manager/services/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../providers/shop_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
@@ -66,8 +65,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Close the requirement dialog first
   Navigator.pop(context);
 
-  // We use a fixed amount of 200 for the monthly subscription
-  const double subAmount = 200.0;
+  // We use a fixed amount of 250 for the monthly subscription
+  const double subAmount = 250.0;
   // Check if Shop is activated for PayHero
   if (shop.payheroChannelId.isEmpty) {
     FeedbackDialog.show(
@@ -92,8 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     phoneNumber: mpesaNumber, 
     amount: subAmount,
     externalReference: shop.generatePayHeroRef("SUB"),
-    basicAuth: dotenv.env['PAYHERO_BASIC_AUTH']!, // 👈 Fixed: Use global Basic Auth from .env
-    channelId: shop.payheroChannelId, // 👈 Fixed: Use ID from Shop Provider
+    channelId: shop.payheroChannelId.isNotEmpty ? shop.payheroChannelId : null,
   );
 
   if (invoiceId != null) {

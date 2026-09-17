@@ -3,7 +3,6 @@ import 'package:duka_manager/services/payhero_service.dart';
 import 'package:duka_manager/widgets/feedback_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For clipboard functionality
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:provider/provider.dart';
@@ -155,12 +154,8 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
 
     setState(() => _isTesting = true);
 
-    final basicAuth = _authController.text.trim().isNotEmpty 
-        ? _authController.text.trim() 
-        : (dotenv.env['PAYHERO_BASIC_AUTH'] ?? "S0dxNGcxSnZhaU1qUGFPVkFBMHo6OXUwMmpnYUkzUkhMQTJtUXhMVTg2aTg2OUd3RHo4eFNGM0JFMFJSYg==");
-    final channelId = _shortCodeController.text.trim().isNotEmpty 
-        ? _shortCodeController.text.trim() 
-        : (dotenv.env['PAYHERO_CHANNEL_ID'] ?? "3145");
+    final basicAuth = _authController.text.trim().isNotEmpty ? _authController.text.trim() : null;
+    final channelId = _shortCodeController.text.trim().isNotEmpty ? _shortCodeController.text.trim() : null;
 
     final invoiceId = await PayHeroService().initiateSTKPush(
       phoneNumber: phone, 

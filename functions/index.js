@@ -52,24 +52,6 @@ exports.payheroCallback = onRequest(async (req, res) => {
                         is_pro: true,
                         last_sub_date: admin.firestore.FieldValue.serverTimestamp()
                     });
-                } else {
-                    const payheroCost = calculatePayHeroFee(amountPaid);
-                    const markup = 2.0;
-                    const totalDeduction = payheroCost + markup;
-
-                    await shopRef.collection('wallet_history').add({
-                        amount: type === "TOPUP" ? amountPaid : -totalDeduction,
-                        type: type,
-                        status: "PAID",
-                        description: type === "TOPUP" ? "Wallet Top Up" : `STK Processing Fee (KES ${payheroCost} + ${markup} Service)`,
-                        date_time: admin.firestore.FieldValue.serverTimestamp(),
-                    });
-
-                    if (type === "TOPUP") {
-                        await shopRef.update({ wallet_balance: admin.firestore.FieldValue.increment(amountPaid) });
-                    } else if (totalDeduction > 0) {
-                        await shopRef.update({ wallet_balance: admin.firestore.FieldValue.increment(-totalDeduction) });
-                    }
                 }
             }
         }
@@ -91,20 +73,20 @@ exports.scheduledAutoRenewal = onSchedule('0 0 * * *', async (event) => {
     snapshot.forEach(doc => {
         const data = doc.data();
         const balance = data.wallet_balance || 0;
-        if (balance >= 200) {
+        if (balance >= 250) {
             const currentExpiry = data.pro_expiry ? data.pro_expiry.toDate() : new Date();
             const newExpiry = new Date(currentExpiry);
             newExpiry.setDate(newExpiry.getDate() + 30);
 
             batch.update(doc.ref, {
-                wallet_balance: admin.firestore.FieldValue.increment(-200),
+                wallet_balance: admin.firestore.FieldValue.increment(-250),
                 pro_expiry: admin.firestore.Timestamp.fromDate(newExpiry),
                 is_pro: true
             });
 
             const historyRef = doc.ref.collection('wallet_history').doc();
             batch.set(historyRef, {
-                amount: -200, type: 'SUBSCRIPTION', status: 'PAID',
+                amount: -250, type: 'SUBSCRIPTION', status: 'PAID',
                 description: 'Automatic Pro Renewal', date_time: admin.firestore.FieldValue.serverTimestamp()
             });
         } else {
@@ -205,27 +187,119 @@ exports.activateMerchantChannel = onCall(async (request) => {
     }
 });
 
-function calculatePayHeroFee(amount) {
-    if (amount <= 49) return 0;
-    if (amount <= 499) return 6;
-    if (amount <= 999) return 10;
-    if (amount <= 1499) return 15;
-    if (amount <= 2499) return 20;
-    if (amount <= 3499) return 25;
-    if (amount <= 4999) return 30;
-    if (amount <= 7499) return 40;
-    if (amount <= 9999) return 45;
-    if (amount <= 14999) return 50;
-    if (amount <= 19999) return 55;
-    if (amount <= 34999) return 80;
-    if (amount <= 49999) return 105;
-    if (amount <= 149999) return 130;
-    if (amount <= 249999) return 160;
-    if (amount <= 349999) return 195;
-    if (amount <= 549999) return 230;
-    if (amount <= 749999) return 275;
-    return 320;
-}
+// --- 💳 SECURE SERVER-SIDE STK PUSH (V2) ---
+exports.initiateStkPush = onCall(async (request) => {
+    console.log("💳 INITIATE STK PUSH DATA:", JSON.stringify(request.data));
+
+    const { phone_number, amount, external_reference, channel_id, custom_basic_auth } = request.data || {};
+
+    if (!phone_number || !amount || !external_reference) {
+        console.error("❌ ERROR: Missing required parameters for STK push.");
+        throw new HttpsError('invalid-argument', 'Missing phone_number, amount, or external_reference.');
+    }
+
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+        throw new HttpsError('invalid-argument', 'Invalid amount specified.');
+    }
+
+    // Format phone to 07XXXXXXXX or 01XXXXXXXX format required by PayHero M-Pesa
+    let cleanPhone = phone_number.toString().replace(/[\s\-\+\(\)]/g, '');
+    if (cleanPhone.startsWith('254') && cleanPhone.length === 12) {
+        cleanPhone = '0' + cleanPhone.substring(3);
+    } else if ((cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) && cleanPhone.length === 9) {
+        cleanPhone = '0' + cleanPhone;
+    }
+
+    // Resolve Authorization header: custom merchant key or platform PAYHERO_API_KEY
+    let authKey = (custom_basic_auth && typeof custom_basic_auth === 'string' && custom_basic_auth.trim().length > 0)
+        ? custom_basic_auth.trim()
+        : (process.env.PAYHERO_API_KEY || "").trim();
+
+    if (authKey.startsWith('Basic ')) {
+        authKey = authKey.substring(6).trim();
+    }
+
+    if (!authKey) {
+        console.error("❌ ERROR: PAYHERO_API_KEY is missing in process.env");
+        throw new HttpsError('failed-precondition', 'Server API Key configuration error.');
+    }
+
+    // Resolve Channel ID
+    let parsedChannel = parseInt(channel_id);
+    if (isNaN(parsedChannel) || parsedChannel <= 0) {
+        parsedChannel = parseInt(process.env.PAYHERO_DEFAULT_CHANNEL_ID || "3145");
+    }
+    if (isNaN(parsedChannel) || parsedChannel <= 0) {
+        parsedChannel = 3145;
+    }
+
+    // Build Callback URL
+    const callbackBase = process.env.PAYHERO_CALLBACK_URL || "https://payherocallback-6xi2wmoqdq-uc.a.run.app";
+    const callbackApiKey = process.env.CALLBACK_API_KEY || "";
+    const callbackUrl = callbackApiKey ? `${callbackBase}?api_key=${callbackApiKey}` : callbackBase;
+
+    const payload = {
+        amount: Math.ceil(numericAmount),
+        phone_number: cleanPhone,
+        channel_id: parsedChannel,
+        provider: "m-pesa",
+        external_reference: external_reference,
+        callback_url: callbackUrl
+    };
+
+    console.log("📤 Sending STK Payload to PayHero:", JSON.stringify(payload));
+
+    const axios = require("axios");
+    try {
+        const response = await axios.post('https://backend.payhero.co.ke/api/v2/payments', payload, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${authKey}`
+            }
+        });
+
+        console.log("✅ PAYHERO STK RESPONSE:", JSON.stringify(response.data));
+
+        if (response.data && (response.data.success === true || response.data.status === "QUEUED")) {
+            // Pre-create Firestore payment_requests tracking doc so real-time stream listener receives it immediately
+            try {
+                await admin.firestore().collection('payment_requests').doc(external_reference).set({
+                    status: 'PENDING',
+                    amount: Math.ceil(numericAmount),
+                    phone_number: cleanPhone,
+                    channel_id: parsedChannel,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            } catch (fsErr) {
+                console.warn("⚠️ Warning initializing payment_requests doc:", fsErr.message);
+            }
+
+            return {
+                success: true,
+                external_reference: external_reference,
+                invoice_id: external_reference,
+                status: response.data.status || "QUEUED"
+            };
+        } else {
+            console.error("❌ PayHero returned unexpected response:", response.data);
+            throw new HttpsError('internal', response.data?.message || 'PayHero did not queue the payment.');
+        }
+    } catch (err) {
+        console.error("🔥 STK Push Critical Error:", err.response ? JSON.stringify(err.response.data) : err.message);
+
+        if (err instanceof HttpsError) throw err;
+
+        const msg = err.response && err.response.data && (err.response.data.error_message || err.response.data.message)
+            ? (err.response.data.error_message || err.response.data.message)
+            : (err.message || 'Payment initiation failed.');
+
+        throw new HttpsError('internal', msg);
+    }
+});
+
+
 
 // --- 📱 AFRICA'S TALKING SMS OTP VERIFICATION ---
 

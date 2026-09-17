@@ -125,11 +125,20 @@ class SalesProvider with ChangeNotifier {
     // Use a Transaction (txn) to ensure data integrity
     await db.transaction((txn) async {
       for (var cartItem in _cart.values) {
+        int? resolvedProductId = cartItem.product.id;
+        if (resolvedProductId == null) {
+          final res = await txn.query('products', where: 'barcode = ?', whereArgs: [cartItem.product.barcode]);
+          if (res.isNotEmpty) {
+            resolvedProductId = res.first['id'] as int?;
+          }
+        }
+        if (resolvedProductId == null) continue;
+
         final profit = (cartItem.product.sellPrice - cartItem.product.buyPrice) * cartItem.quantity;
         
         // 1. Record the Sale
         await txn.insert('sales', {
-          'product_id': cartItem.product.id,
+          'product_id': resolvedProductId,
           'quantity': cartItem.quantity,
           'total_price': cartItem.total,
           'profit': profit,
@@ -144,12 +153,12 @@ class SalesProvider with ChangeNotifier {
           'products',
           {'stock_qty': newStock},
           where: 'id = ?',
-          whereArgs: [cartItem.product.id],
+          whereArgs: [resolvedProductId],
         );
 
         // 3. Log Stock Movement Audit Trail
         await txn.insert('stock_movements', {
-          'product_id': cartItem.product.id,
+          'product_id': resolvedProductId,
           'change_qty': -cartItem.quantity,
           'previous_qty': cartItem.product.stockQty,
           'new_qty': newStock,

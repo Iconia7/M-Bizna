@@ -21,25 +21,52 @@ import 'package:duka_manager/providers/expense_provider.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'dart:ui';
+import 'dart:io';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Load .env
-  await dotenv.load(fileName: "assets/.env");
+  // 1. Load .env safely
+  try {
+    await dotenv.load(fileName: "assets/.env");
+  } catch (e) {
+    debugPrint("Warning: assets/.env failed to load: $e");
+  }
 
   // 2. Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 🚀 Pass all uncaught "fatal" errors from the framework to Crashlytics
+  // 🚀 Pass framework errors to Crashlytics
   FlutterError.onError = (errorDetails) {
-    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    final errorStr = errorDetails.exceptionAsString().toLowerCase();
+    final isNetwork = errorDetails.exception is SocketException ||
+        errorStr.contains('socketexception') ||
+        errorStr.contains('failed host lookup') ||
+        errorStr.contains('connection abort') ||
+        errorStr.contains('fonts.gstatic.com');
+
+    if (isNetwork) {
+      FirebaseCrashlytics.instance.recordFlutterError(errorDetails, fatal: false);
+    } else {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    }
   };
-  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+
+  // Pass uncaught asynchronous errors to Crashlytics
   PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    final errorStr = error.toString().toLowerCase();
+    final isNetwork = error is SocketException ||
+        errorStr.contains('socketexception') ||
+        errorStr.contains('failed host lookup') ||
+        errorStr.contains('connection abort') ||
+        errorStr.contains('software caused') ||
+        errorStr.contains('fonts.gstatic.com') ||
+        errorStr.contains('clientexception');
+
+    // Offline network errors during startup are normal for offline-first POS; log as non-fatal
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: !isNetwork);
     return true;
   };
 

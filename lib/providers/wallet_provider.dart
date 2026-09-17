@@ -32,7 +32,7 @@ class WalletProvider with ChangeNotifier {
   // lib/providers/wallet_provider.dart
 
 Future<bool> paySubscriptionWithWallet(String shopId) async {
-  const double subCost = 200.0;
+  const double subCost = 250.0;
   if (_balance < subCost) return false;
 
   try {

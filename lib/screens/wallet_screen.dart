@@ -237,15 +237,19 @@ final shop = Provider.of<ShopProvider>(context, listen: false);
 
   final settings = await DatabaseHelper.instance.getSettings();
   
+  final effectiveChannel = (settings['payhero_channel_id'] != null && settings['payhero_channel_id'].toString().trim().isNotEmpty)
+      ? settings['payhero_channel_id'].toString().trim()
+      : (shop.payheroChannelId.isNotEmpty ? shop.payheroChannelId : null);
+
   // 🚀 Trigger STK Push with TOPUP prefix
-String? invoiceId = await PayHeroService().initiateSTKPush(
-  phoneNumber: phoneCtrl.text, 
-  amount: amount,
-  // 👇 This generates "TOPUP|SHOP-12345|1766..."
-  externalReference: shop.generatePayHeroRef("TOPUP"), 
-  basicAuth: settings['payhero_auth'],      // 🚀 From User Settings
-  channelId: settings['payhero_channel_id'], // 🚀 From User Settings
-);
+  String? invoiceId = await PayHeroService().initiateSTKPush(
+    phoneNumber: phoneCtrl.text, 
+    amount: amount,
+    // 👇 This generates "TOPUP|SHOP-12345|1766..."
+    externalReference: shop.generatePayHeroRef("TOPUP"), 
+    basicAuth: settings['payhero_auth'],      // 🚀 From User Settings
+    channelId: effectiveChannel, // 🚀 From User Settings or Shop Provider
+  );
   
   if (invoiceId != null) {
     if (!ctx.mounted) return;

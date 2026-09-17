@@ -1,11 +1,7 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 class PayHeroService {
-  final String _callbackUrl = "${dotenv.env['FIREBASE_CALLBACK_URL'] ?? ''}?api_key=${dotenv.env['CALLBACK_API_KEY'] ?? ''}";
-  final String _url = "https://backend.payhero.co.ke/api/v2/payments";
-
   /// Normalizes Kenyan phone numbers to 07XXXXXXXX or 01XXXXXXXX format
   static String formatPhone(String rawPhone) {
     String phone = rawPhone.replaceAll(RegExp(r'[\s\-\+\(\)]'), '');
@@ -17,73 +13,53 @@ class PayHeroService {
     return phone;
   }
 
-  /// Initiates M-Pesa STK Push
+  /// Initiates M-Pesa STK Push via secure Firebase Cloud Function.
+  /// Master credentials are kept exclusively on the server to protect against APK decompilation.
   /// [externalReference] should be pre-formatted as "TYPE|SHOPID|TIMESTAMP"
   Future<String?> initiateSTKPush({
     required String phoneNumber,
     required double amount,
     required String externalReference,
-    required String basicAuth,
-    required String channelId,
+    String? basicAuth,
+    String? channelId,
   }) async {
-    // 1. Resolve and normalize basic auth
-    String effectiveAuth = basicAuth.trim();
-    if (effectiveAuth.isEmpty) {
-      effectiveAuth = dotenv.env['PAYHERO_BASIC_AUTH']?.trim() ?? "";
-    }
-    if (effectiveAuth.startsWith('Basic ')) {
-      effectiveAuth = effectiveAuth.substring(6).trim();
-    }
-
-    // 2. Resolve and parse channel ID as integer (PayHero requires int)
-    int? parsedChannelId = int.tryParse(channelId.trim());
-    if (parsedChannelId == null || parsedChannelId == 0) {
-      parsedChannelId = int.tryParse(dotenv.env['PAYHERO_CHANNEL_ID']?.trim() ?? "3145") ?? 3145;
-    }
-
-    // 3. Normalize phone number
     final cleanPhone = formatPhone(phoneNumber);
-
-    if (effectiveAuth.isEmpty || parsedChannelId == 0) {
-      print("❌ ERROR: Missing PayHero Credentials (Auth: $effectiveAuth, Channel: $parsedChannelId)");
+    if (cleanPhone.isEmpty || amount <= 0 || externalReference.isEmpty) {
+      debugPrint("❌ ERROR: Invalid STK Push parameters (Phone: $cleanPhone, Amount: $amount, Ref: $externalReference)");
       return null;
     }
 
     try {
-      final payload = {
-        "amount": amount.ceil(), // PayHero requires Integers
-        "phone_number": cleanPhone,
-        "channel_id": parsedChannelId, // Must be int
-        "provider": "m-pesa",
-        "external_reference": externalReference,
-        "callback_url": _callbackUrl
+      final callable = FirebaseFunctions.instance.httpsCallable('initiateStkPush');
+      final Map<String, dynamic> params = {
+        'phone_number': cleanPhone,
+        'amount': amount,
+        'external_reference': externalReference,
       };
 
-      print("PayHero Request: $payload");
-
-      final response = await http.post(
-        Uri.parse(_url),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic $effectiveAuth"
-        },
-        body: jsonEncode(payload),
-      );
-
-      print("PayHero Response [${response.statusCode}]: ${response.body}");
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        
-        // Success condition: success is true and status is QUEUED
-        if (data['success'] == true && data['status'] == "QUEUED") {
-          return externalReference; // Return the reference for the Firestore listener
-        }
+      if (channelId != null && channelId.trim().isNotEmpty) {
+        params['channel_id'] = channelId.trim();
       }
+      if (basicAuth != null && basicAuth.trim().isNotEmpty) {
+        params['custom_basic_auth'] = basicAuth.trim();
+      }
+
+      debugPrint("🚀 Calling initiateStkPush Cloud Function with ref: $externalReference");
+      final response = await callable.call(params);
+
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        debugPrint("✅ STK Push Queued via Cloud Function: ${data['external_reference'] ?? externalReference}");
+        return externalReference;
+      }
+
+      debugPrint("⚠️ Cloud Function returned unsuccessful response: $data");
       return null;
-      
+    } on FirebaseFunctionsException catch (fe) {
+      debugPrint("❌ FirebaseFunctionsException initiateStkPush [${fe.code}]: ${fe.message}");
+      return null;
     } catch (e) {
-      print("PayHero Error: $e");
+      debugPrint("❌ PayHeroService initiateSTKPush Error: $e");
       return null;
     }
   }

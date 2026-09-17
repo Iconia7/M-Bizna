@@ -195,14 +195,27 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       final provider = Provider.of<InventoryProvider>(context, listen: false);
       final shop = Provider.of<ShopProvider>(context, listen: false);
+      Product savedProduct;
+
       if (widget.productToEdit != null) {
         await provider.updateProduct(product, isPro: shop.isProActive);
+        savedProduct = product;
       } else {
-        await provider.addProduct(product, isPro: shop.isProActive);
+        final assignedId = await provider.addProduct(product, isPro: shop.isProActive);
+        savedProduct = Product(
+          id: assignedId,
+          name: product.name,
+          barcode: product.barcode,
+          buyPrice: product.buyPrice,
+          sellPrice: product.sellPrice,
+          stockQty: product.stockQty,
+          unit: product.unit,
+          imagePath: product.imagePath,
+        );
       }
 
       if (mounted) {
-        Navigator.pop(context, product);
+        Navigator.pop(context, savedProduct);
         FeedbackDialog.show(context,
             title: "Success", message: "Product saved successfully", isSuccess: true);
       }
