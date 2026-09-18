@@ -10,7 +10,7 @@ class NotificationService {
   static Future<void> initialize() async {
     try {
       await AwesomeNotifications().initialize(
-        null, // Use default app launcher icon
+        'resource://drawable/res_notification_icon',
         [
           NotificationChannel(
             channelKey: stockChannelKey,
@@ -22,6 +22,7 @@ class NotificationService {
             channelShowBadge: true,
             playSound: true,
             enableVibration: true,
+            icon: 'resource://drawable/res_notification_icon',
           ),
           NotificationChannel(
             channelKey: debtChannelKey,
@@ -33,6 +34,7 @@ class NotificationService {
             channelShowBadge: true,
             playSound: true,
             enableVibration: true,
+            icon: 'resource://drawable/res_notification_icon',
           ),
           NotificationChannel(
             channelKey: generalChannelKey,
@@ -42,6 +44,7 @@ class NotificationService {
             ledColor: Colors.white,
             importance: NotificationImportance.Default,
             channelShowBadge: true,
+            icon: 'resource://drawable/res_notification_icon',
           ),
         ],
       );
@@ -95,6 +98,8 @@ class NotificationService {
           body: '$productName is running low ($displayQty remaining). Time to restock!',
           notificationLayout: NotificationLayout.Default,
           color: const Color(0xFFFF6B00),
+          icon: 'resource://drawable/res_notification_icon',
+          largeIcon: 'resource://mipmap/launcher_icon',
         ),
       );
     } catch (e) {
@@ -122,6 +127,8 @@ class NotificationService {
           body: '$customerName has used $pct% of credit limit (Debt: KES ${currentDebt.toStringAsFixed(0)} / Limit: KES ${creditLimit.toStringAsFixed(0)}).',
           notificationLayout: NotificationLayout.Default,
           color: const Color(0xFFFF6B00),
+          icon: 'resource://drawable/res_notification_icon',
+          largeIcon: 'resource://mipmap/launcher_icon',
         ),
       );
     } catch (e) {
@@ -143,6 +150,8 @@ class NotificationService {
           body: 'Awesome Notifications is working! Low stock alerts and customer credit warnings will appear here.',
           notificationLayout: NotificationLayout.Default,
           color: const Color(0xFFFF6B00),
+          icon: 'resource://drawable/res_notification_icon',
+          largeIcon: 'resource://mipmap/launcher_icon',
         ),
       );
       return true;

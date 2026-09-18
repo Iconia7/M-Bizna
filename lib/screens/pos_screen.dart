@@ -265,8 +265,6 @@ Future<void> _paySubscription() async {
     phoneNumber: settings['mpesa_number'] ?? "", 
     amount: subAmount,
     externalReference: shop.generatePayHeroRef("SUB"),
-    basicAuth: settings['payhero_auth'], 
-    channelId: settings['payhero_channel_id'],
   );
 
   if (invoiceId != null) {

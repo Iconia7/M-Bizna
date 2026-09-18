@@ -91,7 +91,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     phoneNumber: mpesaNumber, 
     amount: subAmount,
     externalReference: shop.generatePayHeroRef("SUB"),
-    channelId: shop.payheroChannelId.isNotEmpty ? shop.payheroChannelId : null,
   );
 
   if (invoiceId != null) {

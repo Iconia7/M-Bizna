@@ -1,4 +1,3 @@
-import 'package:duka_manager/db/database_helper.dart';
 import 'package:duka_manager/providers/shop_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -235,20 +234,11 @@ final shop = Provider.of<ShopProvider>(context, listen: false);
   
   Navigator.pop(ctx);
 
-  final settings = await DatabaseHelper.instance.getSettings();
-  
-  final effectiveChannel = (settings['payhero_channel_id'] != null && settings['payhero_channel_id'].toString().trim().isNotEmpty)
-      ? settings['payhero_channel_id'].toString().trim()
-      : (shop.payheroChannelId.isNotEmpty ? shop.payheroChannelId : null);
-
-  // 🚀 Trigger STK Push with TOPUP prefix
+  // 🚀 Trigger STK Push with TOPUP prefix (routes to M-Bizna platform channel)
   String? invoiceId = await PayHeroService().initiateSTKPush(
     phoneNumber: phoneCtrl.text, 
     amount: amount,
-    // 👇 This generates "TOPUP|SHOP-12345|1766..."
     externalReference: shop.generatePayHeroRef("TOPUP"), 
-    basicAuth: settings['payhero_auth'],      // 🚀 From User Settings
-    channelId: effectiveChannel, // 🚀 From User Settings or Shop Provider
   );
   
   if (invoiceId != null) {
