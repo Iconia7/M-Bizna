@@ -55,32 +55,54 @@ Future<void> syncSales(String shopId) async {
     // Full sync happens via Settings -> Cloud Backup.
   }
 
-  // 2. SYNC PRODUCTS (New)
-  Future<void> syncProducts() async {
+  // 2. SYNC PRODUCTS
+  Future<void> syncProducts(String shopId) async {
+    if (shopId.isEmpty) return;
     final db = await DatabaseHelper.instance.database;
-    final products = await db.query('products'); // Sync ALL products to ensure updates
+    final products = await db.query('products');
 
+    if (products.isEmpty) return;
     final batch = _firestore.batch();
     
     for (var row in products) {
-      // Use barcode as ID so we don't duplicate
-      final docRef = _firestore.collection('products').doc(row['barcode'].toString());
-      batch.set(docRef, row); // Overwrite cloud with local
+      final docRef = _firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('products')
+          .doc(row['barcode'].toString());
+      batch.set(docRef, {
+        ...row,
+        'shopId': shopId,
+        'synced_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
     await batch.commit();
   }
 
-  // 3. SYNC CUSTOMERS (New)
-  Future<void> syncCustomers() async {
+  // 3. SYNC CUSTOMERS
+  Future<void> syncCustomers(String shopId) async {
+    if (shopId.isEmpty) return;
     final db = await DatabaseHelper.instance.database;
     final customers = await db.query('customers');
 
+    if (customers.isEmpty) return;
     final batch = _firestore.batch();
     
     for (var row in customers) {
-      final docRef = _firestore.collection('customers').doc(row['phone'].toString());
-      batch.set(docRef, row);
+      final docId = (row['phone'] != null && row['phone'].toString().trim().isNotEmpty)
+          ? row['phone'].toString().trim()
+          : row['id'].toString();
+      final docRef = _firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('customers')
+          .doc(docId);
+      batch.set(docRef, {
+        ...row,
+        'shopId': shopId,
+        'synced_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
     await batch.commit();
@@ -88,9 +110,10 @@ Future<void> syncSales(String shopId) async {
 
   // 🚀 MASTER SYNC COMMAND
   Future<void> syncAll(String shopId) async {
+    if (shopId.isEmpty) return;
     await syncSales(shopId);
-    await syncProducts();
-    await syncCustomers();
-    debugPrint("✅ Full Cloud Sync Complete");
+    await syncProducts(shopId);
+    await syncCustomers(shopId);
+    debugPrint("✅ Full Cloud Sync Complete for shop $shopId");
   }
 }

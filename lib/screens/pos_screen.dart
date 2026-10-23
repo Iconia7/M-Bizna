@@ -12,9 +12,11 @@ import 'package:intl/intl.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/report_provider.dart';
+import '../providers/customer_provider.dart';
 import '../services/payhero_service.dart';
 import '../services/sync_service.dart';
 import '../models/product.dart';
+import '../models/customer.dart';
 import 'add_product_screen.dart';
 import '../widgets/simple_scanner_page.dart';
 import '../widgets/feedback_dialog.dart';
@@ -402,7 +404,7 @@ void _handleCheckout() async {
     context: context,
     backgroundColor: Colors.transparent,
     builder: (ctx) => Container(
-      padding: EdgeInsets.all(25),
+      padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
         color: _surfaceColor, 
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -411,28 +413,49 @@ void _handleCheckout() async {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text("Select Payment Method", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text("Select Payment Method", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+          const SizedBox(height: 10),
           ListTile(
-            leading: Icon(Icons.money, color: Colors.green),
-            title: Text("Cash"),
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFE8F5E9),
+              child: Icon(Icons.money, color: Colors.green),
+            ),
+            title: Text("Cash", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor)),
+            subtitle: Text("Instant cash payment", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             onTap: () { Navigator.pop(ctx); _finalizeSale("Cash"); },
           ),
           ListTile(
-            leading: Icon(Icons.phone_android, color: Colors.green),
-            title: Text("M-Pesa"),
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFE8F5E9),
+              child: Icon(Icons.phone_android, color: Colors.green),
+            ),
+            title: Text("M-Pesa", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor)),
+            subtitle: Text("STK Push or manual paybill", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             onTap: () {
               Navigator.pop(ctx);
 
               if (settings['mpesa_mode'] == 'Automated' && !shop.isProActive) {
-    _showSubscriptionRequiredDialog(); // 👈 Block the user
-    return;
-  }
+                _showSubscriptionRequiredDialog(); // 👈 Block the user
+                return;
+              }
               // 🚀 HYBRID TRIGGER: Decides based on settings
               if (settings['mpesa_mode'] == 'Automated') {
                 _showMpesaPhoneInput(); 
               } else {
                 _showManualMpesaInstruction(settings['mpesa_number']);
               }
+            },
+          ),
+          ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFFFF3E0),
+              child: Icon(Icons.account_balance_wallet, color: Colors.orange),
+            ),
+            title: Text("Credit / Deni", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor)),
+            subtitle: Text("Add to customer debt ledger", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showCreditCustomerPicker();
             },
           ),
         ],
@@ -678,9 +701,320 @@ void _showSubscriptionRequiredDialog() {
   );
 }
 
-  // --- 3. FINALIZE SALE (Used by both Cash & M-Pesa) ---
+  // --- CREDIT / DENI WORKFLOW ---
 
-void _finalizeSale(String method) async {
+  void _showCreditCustomerPicker() async {
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    await customerProvider.loadCustomers();
+    if (!mounted) return;
+
+    final sales = Provider.of<SalesProvider>(context, listen: false);
+    final saleAmount = sales.totalAmount;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        String searchQuery = "";
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            final allCustomers = customerProvider.customers;
+            final query = searchQuery.trim().toLowerCase();
+            final filtered = allCustomers.where((c) {
+              if (query.isEmpty) return true;
+              return c.name.toLowerCase().contains(query) || c.phone.toLowerCase().contains(query);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(modalCtx).size.height * 0.75,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: _surfaceColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, -4)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Select Customer (Deni)", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+                          Text("Sale Amount: KES ${saleAmount.toInt()}", style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: _primaryOrange)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.person_add, color: Colors.green),
+                        tooltip: "Add Customer",
+                        onPressed: () => _showQuickAddCustomerDialog(sheetCtx, setModalState),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Search Bar
+                  TextField(
+                    onChanged: (val) {
+                      setModalState(() {
+                        searchQuery = val;
+                      });
+                    },
+                    style: TextStyle(color: _textColor),
+                    decoration: InputDecoration(
+                      hintText: "Search customer name or phone...",
+                      hintStyle: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () => setModalState(() => searchQuery = ""),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: _containerColor,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Customer List
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.people_outline, size: 48, color: Colors.grey.withOpacity(0.5)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  query.isEmpty ? "No customers registered yet." : "No customer matches \"$searchQuery\"",
+                                  style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange),
+                                  icon: const Icon(Icons.add, color: Colors.white, size: 16),
+                                  label: Text("Add New Customer", style: GoogleFonts.poppins(color: Colors.white, fontSize: 12)),
+                                  onPressed: () => _showQuickAddCustomerDialog(sheetCtx, setModalState),
+                                )
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => Divider(color: Colors.grey.withOpacity(0.1)),
+                            itemBuilder: (ctx, index) {
+                              final customer = filtered[index];
+                              final canAfford = (customer.currentDebt + saleAmount) <= customer.creditLimit;
+                              final remainingCredit = customer.creditLimit - customer.currentDebt;
+
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                leading: CircleAvatar(
+                                  backgroundColor: canAfford ? Colors.blue.withOpacity(0.12) : Colors.red.withOpacity(0.12),
+                                  child: Icon(
+                                    Icons.person,
+                                    color: canAfford ? Colors.blue : Colors.red,
+                                  ),
+                                ),
+                                title: Text(
+                                  customer.name,
+                                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _textColor),
+                                ),
+                                subtitle: Text(
+                                  "${customer.phone} • Debt: KES ${customer.currentDebt.toInt()} / Limit: KES ${customer.creditLimit.toInt()}",
+                                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      canAfford ? "Avail: KES ${remainingCredit.toInt()}" : "Limit Exceeded",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: canAfford ? Colors.green : Colors.red,
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+                                  ],
+                                ),
+                                onTap: () => _onCreditCustomerSelected(sheetCtx, customer, saleAmount),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _onCreditCustomerSelected(BuildContext sheetCtx, Customer customer, double saleAmount) async {
+    final canAfford = (customer.currentDebt + saleAmount) <= customer.creditLimit;
+
+    if (!canAfford) {
+      FeedbackDialog.show(
+        context,
+        title: "Credit Limit Exceeded",
+        message: "${customer.name} owes KES ${customer.currentDebt.toInt()} out of KES ${customer.creditLimit.toInt()} limit.\nAdding KES ${saleAmount.toInt()} exceeds the allowed limit.",
+        isSuccess: false,
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Confirm Credit Sale", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+        content: Text(
+          "Record sale of KES ${saleAmount.toInt()} to ${customer.name}?\n\nNew total debt will be: KES ${(customer.currentDebt + saleAmount).toInt()}.",
+          style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade700),
+        ),
+        actions: [
+          TextButton(
+            child: Text("Cancel", style: GoogleFonts.poppins(color: Colors.grey)),
+            onPressed: () => Navigator.pop(dCtx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text("Confirm Sale", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(dCtx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      Navigator.pop(sheetCtx); // Close customer picker
+      final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+      final success = await customerProvider.recordCreditSale(
+        customer.id!,
+        saleAmount,
+        note: "POS Credit Sale",
+      );
+
+      if (success) {
+        _finalizeSale("Credit (Deni)", customerId: customer.id);
+      } else {
+        if (!mounted) return;
+        FeedbackDialog.show(
+          context,
+          title: "Sale Failed",
+          message: "Could not record credit sale to customer ledger.",
+          isSuccess: false,
+        );
+      }
+    }
+  }
+
+  void _showQuickAddCustomerDialog(BuildContext sheetCtx, StateSetter setModalState) {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final limitCtrl = TextEditingController(text: "2000");
+
+    showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Add Customer", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                style: TextStyle(color: _textColor),
+                decoration: InputDecoration(
+                  labelText: "Customer Name",
+                  filled: true,
+                  fillColor: _containerColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                style: TextStyle(color: _textColor),
+                decoration: InputDecoration(
+                  labelText: "Phone (e.g. 0712345678)",
+                  filled: true,
+                  fillColor: _containerColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: limitCtrl,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: _textColor),
+                decoration: InputDecoration(
+                  labelText: "Credit Limit (KES)",
+                  filled: true,
+                  fillColor: _containerColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text("Cancel", style: GoogleFonts.poppins(color: Colors.grey)),
+            onPressed: () => Navigator.pop(dCtx),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _primaryOrange),
+            child: Text("Save & Select", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              final phone = phoneCtrl.text.trim();
+              final limit = double.tryParse(limitCtrl.text.trim()) ?? 2000.0;
+              if (name.isEmpty || phone.isEmpty) return;
+
+              final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+              final newC = Customer(name: name, phone: phone, creditLimit: limit);
+              await customerProvider.addCustomer(newC);
+              Navigator.pop(dCtx);
+              setModalState(() {});
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 3. FINALIZE SALE (Used by Cash, M-Pesa & Credit) ---
+
+void _finalizeSale(String method, {int? customerId}) async {
     final sales = Provider.of<SalesProvider>(context, listen: false);
     final inventory = Provider.of<InventoryProvider>(context, listen: false);
     final shop = Provider.of<ShopProvider>(context, listen: false); // 👈 Needed to check Pro status
@@ -694,11 +1028,14 @@ void _finalizeSale(String method) async {
     }).toList();
 
     // 💾 STEP 1: Save to Local SQLite
-    await sales.submitOrder(); 
+    await sales.submitOrder(paymentMethod: method, customerId: customerId); 
     
     // 🔄 STEP 2: Refresh Inventory & Reports UI
     await inventory.loadProducts(isPro: shop.isProActive);
     await Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
+    if (customerId != null) {
+      await Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
+    }
 
     // 💰 STEP 3: Handle Cloud Sync (Subscription Based)
     // We no longer deduct KES 2.00 here. 

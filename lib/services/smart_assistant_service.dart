@@ -95,17 +95,17 @@ class SmartAssistantService {
     // 3. INTENT: Customer Debt / Deni / Who owes money
     if (_matches(cleanQuery, ['debt', 'deni', 'madeni', 'owes', 'owe', 'debtor', 'debtors', 'credit', 'unpaid', 'who owes'])) {
       final debtorsResult = await db.rawQuery('''
-        SELECT id, name, phone, debt_balance 
+        SELECT id, name, phone, current_debt 
         FROM customers 
-        WHERE debt_balance > 0 
-        ORDER BY debt_balance DESC
+        WHERE current_debt > 0 
+        ORDER BY current_debt DESC
       ''');
 
       double totalDeni = 0.0;
       final items = <AssistantItem>[];
 
       for (var row in debtorsResult) {
-        final balance = (row['debt_balance'] as num).toDouble();
+        final balance = (row['current_debt'] as num).toDouble();
         totalDeni += balance;
 
         if (items.length < 5) {
@@ -320,7 +320,7 @@ class SmartAssistantService {
         SELECT COALESCE(SUM(total_price), 0.0) as gross, COALESCE(SUM(profit), 0.0) as profit FROM sales
       ''');
       final debtSummary = await db.rawQuery('''
-        SELECT COALESCE(SUM(debt_balance), 0.0) as total_debt FROM customers
+        SELECT COALESCE(SUM(current_debt), 0.0) as total_debt FROM customers
       ''');
       final stockSummary = await db.rawQuery('''
         SELECT COUNT(*) as total_items, SUM(CASE WHEN stock_qty <= 0 THEN 1 ELSE 0 END) as out_of_stock FROM products

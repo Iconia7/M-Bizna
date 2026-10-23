@@ -43,10 +43,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       title = "This Month";
     }
 
-    // 2. Fetch Detailed Data (Move this logic to Provider in Phase 3, keeping here for simplicity now)
+    // 2. Fetch Detailed Data
     final db = await DatabaseHelper.instance.database;
     final result = await db.rawQuery('''
-      SELECT s.date_time, p.name, s.quantity, s.total_price 
+      SELECT s.date_time, p.name, s.quantity, s.total_price, s.profit 
       FROM sales s
       JOIN products p ON s.product_id = p.id
       WHERE s.date_time >= ?
@@ -55,16 +55,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     // 3. Calculate Totals
     double totalRev = 0;
-    // Note: Profit requires joining buy_price, simplified here to just revenue for PDF demo
+    double totalProfit = 0;
     for (var row in result) {
-      totalRev += (row['total_price'] as double);
+      totalRev += ((row['total_price'] as num?)?.toDouble() ?? 0.0);
+      totalProfit += ((row['profit'] as num?)?.toDouble() ?? 0.0);
     }
 
     // 4. Generate PDF
     if (result.isNotEmpty) {
-      await PdfService().generateSalesReport(result, totalRev, totalRev * 0.3, title); // 30% profit estimate
+      await PdfService().generateSalesReport(result, totalRev, totalProfit, title);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No data to export")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No data to export")));
     }
   }
 

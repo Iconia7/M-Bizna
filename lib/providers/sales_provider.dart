@@ -118,7 +118,7 @@ class SalesProvider with ChangeNotifier {
   }
 
   // --- TRANSACTION SUBMIT ---
-  Future<void> submitOrder() async {
+  Future<void> submitOrder({String paymentMethod = 'Cash', int? customerId}) async {
     final db = await DatabaseHelper.instance.database;
     final timestamp = DateTime.now().toIso8601String();
 
@@ -139,9 +139,11 @@ class SalesProvider with ChangeNotifier {
         // 1. Record the Sale
         await txn.insert('sales', {
           'product_id': resolvedProductId,
+          'customer_id': customerId,
           'quantity': cartItem.quantity,
           'total_price': cartItem.total,
           'profit': profit,
+          'payment_method': paymentMethod,
           'date_time': timestamp,
           'synced': 0 
         });
