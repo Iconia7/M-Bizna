@@ -21,11 +21,26 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
   Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() =>
         Provider.of<ExpenseProvider>(context, listen: false).loadExpenses());
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showAddExpenseDialog() {
@@ -114,10 +129,34 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return Scaffold(
       backgroundColor: _containerColor,
       appBar: AppBar(
-        title: Text("Expense Tracker", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: GoogleFonts.poppins(color: _textColor),
+                decoration: InputDecoration(
+                  hintText: "Search expenses (rent, electricity)...",
+                  hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 14),
+                  border: InputBorder.none,
+                ),
+              )
+            : Text("Expense Tracker", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _textColor)),
         backgroundColor: _containerColor,
         elevation: 0,
         iconTheme: IconThemeData(color: _textColor),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: _textColor),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
+        ],
       ),
       body: Consumer<ExpenseProvider>(
         builder: (context, provider, _) {
@@ -133,6 +172,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               ),
             );
           }
+
+          final displayExpenses = _searchQuery.isEmpty
+              ? provider.expenses
+              : provider.expenses.where((e) {
+                  return e.description.toLowerCase().contains(_searchQuery) ||
+                         e.category.toLowerCase().contains(_searchQuery);
+                }).toList();
 
           return Column(
             children: [
@@ -155,13 +201,27 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 ),
               ),
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  itemCount: provider.expenses.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 15),
-                  itemBuilder: (context, index) {
-                    final expense = provider.expenses[index];
-                    return Container(
+                child: displayExpenses.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                            const SizedBox(height: 10),
+                            Text(
+                              "No expenses found matching \"$_searchQuery\"",
+                              style: GoogleFonts.poppins(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        itemCount: displayExpenses.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 15),
+                        itemBuilder: (context, index) {
+                          final expense = displayExpenses[index];
+                          return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _cardColor,

@@ -41,112 +41,224 @@ class _POSScreenState extends State<POSScreen> {
       context: context,
       isScrollControlled: true, // Allows full height
       backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, controller) {
-          return Container(
-            decoration: BoxDecoration(
-              color: _surfaceColor,
-              borderRadius: BorderRadius.circular(20).copyWith(bottomLeft: Radius.zero, bottomRight: Radius.zero),
-            ),
-            child: Column(
-              children: [
-                // Handle Bar
-                Container(
-                  margin: EdgeInsets.symmetric(vertical: 10),
-                  width: 40, height: 5,
-                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))
-                ),
-                // Title
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Text("Quick Select", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
-                ),
-                // Search Bar - We will implement a simple filter locally
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: "Search items (e.g. Sugar, Rice)...",
-                      hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                      filled: true,
-                      fillColor: _containerColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0)
-                    ),
-                    onChanged: (val) {
-                      // In a real app, update the list state here
-                      // For this demo, we rely on the list below being scrollable
-                    },
+      builder: (ctx) {
+        String searchQuery = "";
+        final searchController = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.9,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, controller) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: _surfaceColor,
+                    borderRadius: BorderRadius.circular(20).copyWith(bottomLeft: Radius.zero, bottomRight: Radius.zero),
                   ),
-                ),
-                SizedBox(height: 10),
-                
-                // THE LIST
-                Expanded(
-                  child: Consumer<InventoryProvider>(
-                    builder: (ctx, inventory, _) {
-                      final products = inventory.products;
-                      return GridView.builder(
-                        controller: controller, // Link to DraggableSheet
-                        padding: EdgeInsets.all(20),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3, // 3 items per row
-                          childAspectRatio: 0.8,
-                          crossAxisSpacing: 15,
-                          mainAxisSpacing: 15,
-                        ),
-                        itemCount: products.length,
-                        itemBuilder: (ctx, i) {
-                          final product = products[i];
-                          return GestureDetector(
-                            onTap: () {
-                              Provider.of<SalesProvider>(context, listen: false).addToCart(product);
-                              Navigator.pop(ctx); // Close and go back to POS
-                              FeedbackDialog.show(context, title: "Added", message: "${product.name}", isSuccess: true);
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: _cardColor,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: _containerColor),
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Icon / Image
-                                  Container(
-                                    height: 40, width: 40,
-                                    decoration: BoxDecoration(color: _primaryOrange.withOpacity(0.1), shape: BoxShape.circle),
-                                    child: Center(child: Text(product.name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: _primaryOrange))),
-                                  ),
-                                  SizedBox(height: 10),
-                                  // Name
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                                    child: Text(product.name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500)),
-                                  ),
-                                  SizedBox(height: 5),
-                                  // Price
-                                  Text("KES ${product.sellPrice.toInt()}", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                                ],
-                              ),
+                  child: Column(
+                    children: [
+                      // Handle Bar
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        width: 40, height: 5,
+                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))
+                      ),
+                      // Title
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Quick Select", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: _textColor)),
+                            Consumer<InventoryProvider>(
+                              builder: (ctx, inventory, _) {
+                                return Text(
+                                  "${inventory.products.length} items",
+                                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      );
-                    },
+                          ],
+                        ),
+                      ),
+                      // Search Bar
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: TextField(
+                          controller: searchController,
+                          autofocus: false,
+                          style: GoogleFonts.poppins(color: _textColor),
+                          decoration: InputDecoration(
+                            hintText: "Search items or barcode...",
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
+                            prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                            suffixIcon: searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
+                                    onPressed: () {
+                                      searchController.clear();
+                                      setSheetState(() => searchQuery = "");
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: _containerColor,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 0)
+                          ),
+                          onChanged: (val) {
+                            setSheetState(() => searchQuery = val);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      
+                      // THE LIST
+                      Expanded(
+                        child: Consumer<InventoryProvider>(
+                          builder: (ctx, inventory, _) {
+                            final q = searchQuery.trim().toLowerCase();
+                            final products = q.isEmpty
+                                ? inventory.products
+                                : inventory.products.where((p) {
+                                    return p.name.toLowerCase().contains(q) ||
+                                           p.barcode.toLowerCase().contains(q);
+                                  }).toList();
+
+                            if (products.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        q.isEmpty ? "No products in inventory" : "No items match \"$searchQuery\"",
+                                        style: GoogleFonts.poppins(color: Colors.grey, fontSize: 14),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return GridView.builder(
+                              controller: controller, // Link to DraggableSheet
+                              padding: const EdgeInsets.all(20),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3, // 3 items per row
+                                childAspectRatio: 0.8,
+                                crossAxisSpacing: 15,
+                                mainAxisSpacing: 15,
+                              ),
+                              itemCount: products.length,
+                              itemBuilder: (ctx, i) {
+                                final product = products[i];
+                                final isOutOfStock = product.stockQty <= 0;
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    if (isOutOfStock) {
+                                      FeedbackDialog.show(
+                                        context,
+                                        title: "Out of Stock",
+                                        message: "Cannot sell ${product.name} (0 stock)",
+                                        isSuccess: false,
+                                      );
+                                      return;
+                                    }
+                                    Provider.of<SalesProvider>(context, listen: false).addToCart(product);
+                                    Navigator.pop(ctx); // Close and go back to POS
+                                    FeedbackDialog.show(context, title: "Added", message: product.name, isSuccess: true);
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: _cardColor,
+                                      borderRadius: BorderRadius.circular(15),
+                                      border: Border.all(
+                                        color: isOutOfStock ? Colors.red.withOpacity(0.3) : _containerColor,
+                                      ),
+                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // Icon / Image
+                                        Container(
+                                          height: 40, width: 40,
+                                          decoration: BoxDecoration(
+                                            color: isOutOfStock
+                                                ? Colors.red.withOpacity(0.1)
+                                                : _primaryOrange.withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              product.name.isNotEmpty ? product.name[0].toUpperCase() : "?",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: isOutOfStock ? Colors.red : _primaryOrange,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        // Name
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                                          child: Text(
+                                            product.name,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: isOutOfStock ? Colors.grey : _textColor,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        // Price
+                                        Text(
+                                          "KES ${product.sellPrice.toInt()}",
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        if (isOutOfStock)
+                                          Text(
+                                            "Out of stock",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.redAccent,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      )
+                    ],
                   ),
-                )
-              ],
-            ),
-          );
-        },
-      ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 

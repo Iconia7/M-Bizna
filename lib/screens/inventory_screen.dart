@@ -46,7 +46,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     // Filter by Search
     List<Product> filtered = allProducts.where((p) {
       return p.name.toLowerCase().contains(_searchQuery) || 
-             p.barcode.contains(_searchQuery);
+             p.barcode.toLowerCase().contains(_searchQuery);
     }).toList();
 
     // Sort

@@ -22,10 +22,25 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
   static const Color whatsappGreen = Color(0xFF25D366);
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
     Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showAddCustomerDialog() {
@@ -338,6 +353,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final customerProvider = Provider.of<CustomerProvider>(context);
     final customers = customerProvider.customers;
 
+    final displayCustomers = _searchQuery.isEmpty
+        ? customers
+        : customers.where((c) {
+            return c.name.toLowerCase().contains(_searchQuery) ||
+                   c.phone.toLowerCase().contains(_searchQuery);
+          }).toList();
+
     final totalDebt = customers.fold<double>(0.0, (sum, c) => sum + c.currentDebt);
     final totalDebtors = customers.where((c) => c.currentDebt > 0).length;
 
@@ -347,7 +369,31 @@ class _CustomersScreenState extends State<CustomersScreen> {
         backgroundColor: _containerColor,
         elevation: 0,
         centerTitle: false,
-        title: Text("Deni Manager", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: GoogleFonts.poppins(color: _textColor),
+                decoration: InputDecoration(
+                  hintText: "Search customer or phone...",
+                  hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 14),
+                  border: InputBorder.none,
+                ),
+              )
+            : Text("Deni Manager", style: GoogleFonts.poppins(color: _textColor, fontWeight: FontWeight.bold, fontSize: 24)),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: _textColor),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
+        ],
         iconTheme: IconThemeData(color: _textColor),
       ),
       body: customers.isEmpty
@@ -410,12 +456,26 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
                 // Customer List
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    itemCount: customers.length,
-                    separatorBuilder: (ctx, i) => const SizedBox(height: 12),
-                    itemBuilder: (ctx, i) {
-                      final customer = customers[i];
+                  child: displayCustomers.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 10),
+                              Text(
+                                "No customer found matching \"$_searchQuery\"",
+                                style: GoogleFonts.poppins(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          itemCount: displayCustomers.length,
+                          separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+                          itemBuilder: (ctx, i) {
+                            final customer = displayCustomers[i];
                       final isHighRisk = customer.currentDebt > (customer.creditLimit * 0.8);
                       final debtRatio = (customer.currentDebt / customer.creditLimit).clamp(0.0, 1.0);
 

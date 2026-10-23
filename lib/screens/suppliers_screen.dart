@@ -22,10 +22,25 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   Color get _cardColor => Theme.of(context).brightness == Brightness.light ? Colors.white : const Color(0xFF1E1E1E);
   Color get _textColor => Theme.of(context).textTheme.bodyLarge?.color ?? const Color(0xFF1A1A1A);
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
     Provider.of<SupplierProvider>(context, listen: false).loadSuppliers();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showAddEditSupplierDialog({Supplier? supplierToEdit}) {
@@ -344,13 +359,44 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     final supplierProvider = Provider.of<SupplierProvider>(context);
     final suppliers = supplierProvider.suppliers;
 
+    final displaySuppliers = _searchQuery.isEmpty
+        ? suppliers
+        : suppliers.where((s) {
+            final nameMatch = s.name.toLowerCase().contains(_searchQuery);
+            final phoneMatch = s.phone.toLowerCase().contains(_searchQuery);
+            final companyMatch = s.company?.toLowerCase().contains(_searchQuery) ?? false;
+            return nameMatch || phoneMatch || companyMatch;
+          }).toList();
+
     return Scaffold(
       backgroundColor: _containerColor,
       appBar: AppBar(
         backgroundColor: _containerColor,
         elevation: 0,
-        title: Text("Suppliers & Restock", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, color: _textColor)),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: GoogleFonts.poppins(color: _textColor),
+                decoration: InputDecoration(
+                  hintText: "Search suppliers (name, company)...",
+                  hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 14),
+                  border: InputBorder.none,
+                ),
+              )
+            : Text("Suppliers & Restock", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, color: _textColor)),
         actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: _textColor),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
           IconButton(
             icon: Icon(Icons.add, color: _textColor),
             onPressed: () => _showAddEditSupplierDialog(),
@@ -375,12 +421,26 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
               ],
             ),
           )
-        : ListView.separated(
-            padding: const EdgeInsets.all(20),
-            itemCount: suppliers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (ctx, i) {
-              final s = suppliers[i];
+        : displaySuppliers.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 10),
+                  Text(
+                    "No suppliers found matching \"$_searchQuery\"",
+                    style: GoogleFonts.poppins(color: Colors.grey),
+                  ),
+                ],
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(20),
+              itemCount: displaySuppliers.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (ctx, i) {
+                final s = displaySuppliers[i];
 
               return Container(
                 decoration: BoxDecoration(
