@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 
 // 1. Load the properties file
 val keystoreProperties = Properties()
@@ -61,6 +62,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            // Prevent offline/DNS drops from failing the release bundle build on Crashlytics symbol upload
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
         }
     }
 }
