@@ -130,14 +130,19 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   void _showListeningDialog(String invoiceId) {
     final shop = Provider.of<ShopProvider>(context, listen: false);
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    bool isHandled = false;
+    final paymentStream = FirebaseFirestore.instance
+        .collection('payment_requests')
+        .doc(invoiceId)
+        .snapshots();
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('payment_requests').doc(invoiceId).snapshots(),
-          builder: (context, snapshot) {
+          stream: paymentStream,
+          builder: (dialogContext, snapshot) {
             String status = "PENDING";
             if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>?;
@@ -146,20 +151,25 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
             // PAYMENT CONFIRMED
             if (status == "PAID") {
-              shop.loadSubscriptionStatus(auth.user?.uid);
-              shop.refreshProStatus();
+              if (!isHandled) {
+                isHandled = true;
+                shop.loadSubscriptionStatus(auth.user?.uid);
+                shop.refreshProStatus();
 
-              Future.delayed(const Duration(seconds: 2), () {
-                if (mounted) {
-                  Navigator.of(ctx).pop();
-                  FeedbackDialog.show(
-                    context,
-                    title: "Pro Activated!",
-                    message: "Thank you! Your ${_selectedPlan.title} is now active.",
-                    isSuccess: true,
-                  );
-                }
-              });
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                  }
+                  if (mounted) {
+                    FeedbackDialog.show(
+                      context,
+                      title: "Pro Activated!",
+                      message: "Thank you! Your ${_selectedPlan.title} is now active.",
+                      isSuccess: true,
+                    );
+                  }
+                });
+              }
 
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),

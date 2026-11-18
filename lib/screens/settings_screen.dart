@@ -143,13 +143,19 @@ void _showNumberRequiredDialog() {
 }
 
   void _showListeningDialog(String invoiceId) {
+    bool isHandled = false;
+    final paymentStream = FirebaseFirestore.instance
+        .collection('payment_requests')
+        .doc(invoiceId)
+        .snapshots();
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('payment_requests').doc(invoiceId).snapshots(),
-          builder: (context, snapshot) {
+          stream: paymentStream,
+          builder: (dialogContext, snapshot) {
             String status = "PENDING";
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
@@ -158,10 +164,15 @@ void _showNumberRequiredDialog() {
 
             // ✅ PAYMENT RECEIVED
             if (status == "PAID") {
-              Provider.of<ShopProvider>(context, listen: false).refreshProStatus();
-              Future.delayed(Duration(seconds: 2), () {
-                Navigator.of(ctx).pop();// Auto-complete sale
-              });
+              if (!isHandled) {
+                isHandled = true;
+                Provider.of<ShopProvider>(context, listen: false).refreshProStatus();
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                  }
+                });
+              }
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 content: Column(

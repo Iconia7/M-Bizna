@@ -562,13 +562,19 @@ void _handleCheckout() async {
 
   // Step C: The Real-Time Listener (Magic Part)
   void _showListeningDialog(String invoiceId) {
+    bool isHandled = false;
+    final paymentStream = FirebaseFirestore.instance
+        .collection('payment_requests')
+        .doc(invoiceId)
+        .snapshots();
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('payment_requests').doc(invoiceId).snapshots(),
-          builder: (context, snapshot) {
+          stream: paymentStream,
+          builder: (dialogContext, snapshot) {
             String status = "PENDING";
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
@@ -577,18 +583,25 @@ void _handleCheckout() async {
 
             // ✅ PAYMENT RECEIVED
             if (status == "PAID") {
-              Provider.of<ShopProvider>(context, listen: false).refreshProStatus();
-              Future.delayed(Duration(seconds: 2), () {
-                Navigator.of(ctx).pop();
-                _finalizeSale("M-Pesa (Pro)"); // Auto-complete sale
-              });
+              if (!isHandled) {
+                isHandled = true;
+                Provider.of<ShopProvider>(context, listen: false).refreshProStatus();
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                  }
+                  if (mounted) {
+                    _finalizeSale("M-Pesa (Pro)"); // Auto-complete sale once
+                  }
+                });
+              }
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 80),
-                    SizedBox(height: 20),
+                    const Icon(Icons.check_circle, color: Colors.green, size: 80),
+                    const SizedBox(height: 20),
                     Text("Payment Confirmed!", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18)),
                   ],
                 ),
@@ -598,9 +611,9 @@ void _handleCheckout() async {
             // ❌ PAYMENT FAILED
             if (status == "FAILED") {
               return AlertDialog(
-                title: Text("Payment Failed"),
-                content: Text("Customer cancelled or insufficient funds."),
-                actions: [TextButton(child: Text("Close"), onPressed: () => Navigator.pop(ctx))],
+                title: const Text("Payment Failed"),
+                content: const Text("Customer cancelled or insufficient funds."),
+                actions: [TextButton(child: const Text("Close"), onPressed: () => Navigator.pop(ctx))],
               );
             }
 
@@ -611,12 +624,12 @@ void _handleCheckout() async {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(color: _primaryOrange),
-                  SizedBox(height: 25),
+                  const SizedBox(height: 25),
                   Text("Waiting for M-Pesa...", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text("Ask customer to enter PIN", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-                  SizedBox(height: 20),
-                  TextButton(child: Text("Cancel", style: TextStyle(color: Colors.red)), onPressed: () => Navigator.pop(ctx))
+                  const SizedBox(height: 20),
+                  TextButton(child: const Text("Cancel", style: TextStyle(color: Colors.red)), onPressed: () => Navigator.pop(ctx))
                 ],
               ),
             );
@@ -1018,6 +1031,8 @@ void _finalizeSale(String method, {int? customerId}) async {
     final sales = Provider.of<SalesProvider>(context, listen: false);
     final inventory = Provider.of<InventoryProvider>(context, listen: false);
     final shop = Provider.of<ShopProvider>(context, listen: false); // 👈 Needed to check Pro status
+    final report = Provider.of<ReportProvider>(context, listen: false);
+    final customerProv = Provider.of<CustomerProvider>(context, listen: false);
 
     // 📝 STEP 0: Capture Receipt Data (Before clearing cart)
     final double totalAmount = sales.totalAmount;
@@ -1032,9 +1047,9 @@ void _finalizeSale(String method, {int? customerId}) async {
     
     // 🔄 STEP 2: Refresh Inventory & Reports UI
     await inventory.loadProducts(isPro: shop.isProActive);
-    await Provider.of<ReportProvider>(context, listen: false).loadDashboardStats();
+    await report.loadDashboardStats();
     if (customerId != null) {
-      await Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
+      await customerProv.loadCustomers();
     }
 
     // 💰 STEP 3: Handle Cloud Sync (Subscription Based)
@@ -1048,6 +1063,8 @@ void _finalizeSale(String method, {int? customerId}) async {
         debugPrint("Background sync failed: $e. Sale remains safe in local DB.");
       }
     }
+
+    if (!mounted) return;
 
     // 🖨️ STEP 4: Show Success Dialog
     showDialog(

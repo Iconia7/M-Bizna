@@ -228,10 +228,10 @@ exports.initiateStkPush = onCall(async (request) => {
     // Resolve Channel ID
     let parsedChannel = parseInt(channel_id);
     if (isNaN(parsedChannel) || parsedChannel <= 0) {
-        parsedChannel = parseInt(process.env.PAYHERO_DEFAULT_CHANNEL_ID || "3145");
+        parsedChannel = parseInt(process.env.PAYHERO_DEFAULT_CHANNEL_ID || "15485");
     }
     if (isNaN(parsedChannel) || parsedChannel <= 0) {
-        parsedChannel = 3145;
+        parsedChannel = 15485;
     }
 
     // Build Callback URL
@@ -316,7 +316,7 @@ function normalizePhoneNumber(phone) {
     // Starts with 0 (e.g. 0712345678 or 0117814250 - 10 digits)
     if (cleaned.startsWith('0') && cleaned.length === 10) {
         cleaned = '254' + cleaned.substring(1);
-    } 
+    }
     // 9 digits starting with 7 or 1 (e.g. 712345678 or 117814250)
     else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
         cleaned = '254' + cleaned;

@@ -256,14 +256,20 @@ final shop = Provider.of<ShopProvider>(context, listen: false);
 
   // --- 2. LISTENING DIALOG (The Secure Check) ---
   void _showListeningDialog(BuildContext context, String invoiceId, double amount) {
+    bool isHandled = false;
+    final paymentStream = FirebaseFirestore.instance
+        .collection('payment_requests')
+        .doc(invoiceId)
+        .snapshots();
+
     showDialog(
       context: context,
       barrierDismissible: false, // Force them to wait
       builder: (ctx) {
         return StreamBuilder<DocumentSnapshot>(
           // Listen to the specific invoice in Firestore
-          stream: FirebaseFirestore.instance.collection('payment_requests').doc(invoiceId).snapshots(),
-          builder: (context, snapshot) {
+          stream: paymentStream,
+          builder: (dialogContext, snapshot) {
             
             String status = "PENDING";
             if (snapshot.hasData && snapshot.data!.exists) {
@@ -273,12 +279,19 @@ final shop = Provider.of<ShopProvider>(context, listen: false);
 
             // ✅ SUCCESS: Money Received
             if (status == "PAID") {
-              // Now it is safe to add money to the local wallet
-              Future.delayed(Duration.zero, () {
-                 Provider.of<WalletProvider>(context, listen: false).deposit(amount);
-                 Navigator.pop(ctx); // Close Dialog
-                 FeedbackDialog.show(context, title: "Success", message: "Wallet recharged!", isSuccess: true);
-              });
+              if (!isHandled) {
+                isHandled = true;
+                // Now it is safe to add money to the local wallet once
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop(); // Close Dialog safely
+                  }
+                  if (context.mounted) {
+                    Provider.of<WalletProvider>(context, listen: false).deposit(amount);
+                    FeedbackDialog.show(context, title: "Success", message: "Wallet recharged!", isSuccess: true);
+                  }
+                });
+              }
 
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
